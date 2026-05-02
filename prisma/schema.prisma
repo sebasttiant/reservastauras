@@ -1,0 +1,55 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+  CANCELLED
+}
+
+model Admin {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime      @default(now())
+  confirmed    Reservation[] @relation("ReservationConfirmedBy")
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  name         String
+  phone        String?
+  createdAt    DateTime      @default(now())
+  reservations Reservation[]
+}
+
+model Reservation {
+  id              String            @id @default(cuid())
+  userId          String
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reservationDate DateTime          @db.Date
+  reservationTime String
+  area            String?
+  partySize       Int
+  notes           String?
+  status          ReservationStatus @default(PENDING)
+  confirmedAt     DateTime?
+  confirmedById   String?
+  confirmedBy     Admin?            @relation("ReservationConfirmedBy", fields: [confirmedById], references: [id])
+  rejectedAt      DateTime?
+  cancelledAt     DateTime?
+  emailError      String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([status, reservationDate, reservationTime])
+  @@index([area])
+}

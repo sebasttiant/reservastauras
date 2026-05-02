@@ -1,0 +1,52 @@
+{
+  "name": "reservastauras",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.19.0",
+  "engines": {
+    "node": "24.15.0",
+    "pnpm": ">=10.19.0"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:dev": "prisma migrate dev",
+    "db:seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "7.8.0",
+    "@prisma/adapter-pg": "7.8.0",
+    "bcryptjs": "3.0.3",
+    "jose": "6.2.3",
+    "next": "16.2.4",
+    "nodemailer": "8.0.7",
+    "react": "19.2.5",
+    "pg": "8.20.0",
+    "prisma": "7.8.0",
+    "react-dom": "19.2.5",
+    "server-only": "0.0.1",
+    "zod": "4.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "24.12.2",
+    "@types/nodemailer": "8.0.0",
+    "@types/pg": "8.20.0",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "eslint": "9.39.4",
+    "eslint-config-next": "16.2.4",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.5"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
+}
