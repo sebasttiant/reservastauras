@@ -1,5 +1,7 @@
 import { defineConfig, env } from "prisma/config";
 
+const envUrl = process.env.DATABASE_URL;
+
 interface Env {
   DATABASE_URL: string;
 }
@@ -11,6 +13,6 @@ export default defineConfig({
     seed: "pnpm db:seed",
   },
   datasource: {
-    url: env<Env>("DATABASE_URL"),
+    url: envUrl ?? "postgresql://reservas:reservas@localhost:5432/reservastauras?schema=public",
   },
 });

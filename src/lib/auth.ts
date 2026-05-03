@@ -3,13 +3,14 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { SignJWT, jwtVerify } from "jose";
 import { compare } from "bcryptjs";
-import { SESSION_COOKIE_NAME } from "@/lib/constants";
+import { ADMIN_ROLE, SESSION_COOKIE_NAME, type AdminRoleValue } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { getEnv } from "@/lib/env";
 
 export interface AdminSession {
   adminId: string;
   email: string;
+  role: AdminRoleValue;
 }
 
 function getSessionSecret(): Uint8Array {
@@ -17,7 +18,7 @@ function getSessionSecret(): Uint8Array {
 }
 
 export async function createAdminSession(admin: AdminSession): Promise<string> {
-  return new SignJWT({ email: admin.email })
+  return new SignJWT({ email: admin.email, role: admin.role })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(admin.adminId)
     .setIssuedAt()
@@ -29,10 +30,12 @@ export async function verifyAdminSession(token: string): Promise<AdminSession | 
   try {
     const result = await jwtVerify(token, getSessionSecret());
     const email = result.payload.email;
+    const role = result.payload.role;
 
     if (!result.payload.sub || typeof email !== "string") return null;
+    if (role !== ADMIN_ROLE.SUPER_ADMIN && role !== ADMIN_ROLE.ADMIN) return null;
 
-    return { adminId: result.payload.sub, email };
+    return { adminId: result.payload.sub, email, role };
   } catch {
     return null;
   }
@@ -40,12 +43,12 @@ export async function verifyAdminSession(token: string): Promise<AdminSession | 
 
 export async function signInAdmin(email: string, password: string): Promise<boolean> {
   const admin = await prisma.admin.findUnique({ where: { email } });
-  if (!admin) return false;
+  if (!admin || !admin.isActive) return false;
 
   const passwordMatches = await compare(password, admin.passwordHash);
   if (!passwordMatches) return false;
 
-  const token = await createAdminSession({ adminId: admin.id, email: admin.email });
+  const token = await createAdminSession({ adminId: admin.id, email: admin.email, role: admin.role });
   const cookieStore = await cookies();
 
   cookieStore.set(SESSION_COOKIE_NAME, token, {
@@ -69,11 +72,26 @@ export async function getCurrentAdmin(): Promise<AdminSession | null> {
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   if (!token) return null;
 
-  return verifyAdminSession(token);
+  const session = await verifyAdminSession(token);
+  if (!session) return null;
+
+  const admin = await prisma.admin.findUnique({
+    where: { id: session.adminId },
+    select: { email: true, role: true, isActive: true },
+  });
+  if (!admin?.isActive) return null;
+
+  return { adminId: session.adminId, email: admin.email, role: admin.role };
 }
 
 export async function requireAdmin(): Promise<AdminSession> {
   const admin = await getCurrentAdmin();
   if (!admin) redirect("/admin/login");
+  return admin;
+}
+
+export async function requireSuperAdmin(): Promise<AdminSession> {
+  const admin = await requireAdmin();
+  if (admin.role !== ADMIN_ROLE.SUPER_ADMIN) redirect("/admin?error=No%20ten%C3%A9s%20permiso%20para%20esta%20secci%C3%B3n.");
   return admin;
 }

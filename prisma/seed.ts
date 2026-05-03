@@ -1,7 +1,14 @@
 import { hash } from "bcryptjs";
-import { PrismaClient } from "@prisma/client";
+import { AdminRole, PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 
-const prisma = new PrismaClient();
+const connectionString = process.env.DATABASE_URL;
+
+if (!connectionString) {
+  throw new Error("DATABASE_URL is required before seeding.");
+}
+
+const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
 async function main() {
   const email = process.env.ADMIN_EMAIL;
@@ -13,11 +20,13 @@ async function main() {
 
   await prisma.admin.upsert({
     where: { email: email.toLowerCase() },
-    update: {},
+    update: { role: AdminRole.SUPER_ADMIN, isActive: true },
     create: {
       email: email.toLowerCase(),
       name: "Administrador",
       passwordHash: await hash(password, 12),
+      role: AdminRole.SUPER_ADMIN,
+      isActive: true,
     },
   });
 }

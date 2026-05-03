@@ -2,13 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import type { Route } from "next";
 import { Prisma } from "@prisma/client";
+import { hash } from "bcryptjs";
 import { RESERVATION_STATUS } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { sendReservationConfirmationEmail } from "@/lib/email";
 import { canTransitionReservation } from "@/lib/reservations/state";
-import { formDataToRecord, loginSchema, reservationRequestSchema } from "@/lib/validation";
-import { requireAdmin, signInAdmin, signOutAdmin } from "@/lib/auth";
+import { createAdminSchema, formDataToRecord, loginSchema, reservationRequestSchema, toggleAdminSchema } from "@/lib/validation";
+import { requireAdmin, requireSuperAdmin, signInAdmin, signOutAdmin } from "@/lib/auth";
 
 function toDateOnly(value: string): Date {
   return new Date(`${value}T00:00:00.000Z`);
@@ -19,8 +21,19 @@ function normalizeOptionalText(value: string | undefined): string | null {
   return trimmed ? trimmed : null;
 }
 
+function buildReservationNotes(reason: string, country: string, notes: string | undefined): string {
+  const extra = normalizeOptionalText(notes) ?? "Sin especificaciones adicionales.";
+  return [`Motivo: ${reason}`, `País: ${country}`, `Especificaciones: ${extra}`].join("\n");
+}
+
 function redirectWithError(path: string, message: string): never {
-  redirect(`${path}?error=${encodeURIComponent(message)}`);
+  const query = new URLSearchParams({ error: message });
+  redirect(`${path}?${query.toString()}` as Route);
+}
+
+function redirectWithSuccess(path: string, key: string): never {
+  const query = new URLSearchParams({ ok: key });
+  redirect(`${path}?${query.toString()}` as Route);
 }
 
 export async function createReservationAction(formData: FormData): Promise<void> {
@@ -41,7 +54,7 @@ export async function createReservationAction(formData: FormData): Promise<void>
       reservationTime: input.reservationTime,
       area: normalizeOptionalText(input.area),
       partySize: input.partySize,
-      notes: normalizeOptionalText(input.notes),
+      notes: buildReservationNotes(input.reason, input.country, input.notes),
       status: RESERVATION_STATUS.PENDING,
     },
   });
@@ -63,6 +76,51 @@ export async function loginAction(formData: FormData): Promise<void> {
 export async function logoutAction(): Promise<void> {
   await signOutAdmin();
   redirect("/admin/login");
+}
+
+export async function createAdminAction(formData: FormData): Promise<void> {
+  await requireSuperAdmin();
+  const parsed = createAdminSchema.safeParse(formDataToRecord(formData));
+  if (!parsed.success) redirectWithError("/admin/users", parsed.error.issues[0]?.message ?? "Datos inválidos.");
+
+  const input = parsed.data;
+  try {
+    await prisma.admin.create({
+      data: {
+        name: input.name,
+        email: input.email,
+        passwordHash: await hash(input.password, 12),
+        role: input.role,
+        isActive: true,
+      },
+    });
+  } catch (error: unknown) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      redirectWithError("/admin/users", "Ya existe un admin con ese email.");
+    }
+    throw error;
+  }
+
+  revalidatePath("/admin/users");
+  redirectWithSuccess("/admin/users", "admin-created");
+}
+
+export async function toggleAdminActiveAction(formData: FormData): Promise<void> {
+  const currentAdmin = await requireSuperAdmin();
+  const parsed = toggleAdminSchema.safeParse(formDataToRecord(formData));
+  if (!parsed.success) redirectWithError("/admin/users", "Admin inválido.");
+
+  const { adminId } = parsed.data;
+  if (adminId === currentAdmin.adminId) {
+    redirectWithError("/admin/users", "No podés desactivar tu propio usuario.");
+  }
+
+  const admin = await prisma.admin.findUnique({ where: { id: adminId }, select: { isActive: true } });
+  if (!admin) redirectWithError("/admin/users", "Admin no encontrado.");
+
+  await prisma.admin.update({ where: { id: adminId }, data: { isActive: !admin.isActive } });
+  revalidatePath("/admin/users");
+  redirectWithSuccess("/admin/users", admin.isActive ? "admin-disabled" : "admin-enabled");
 }
 
 type ConfirmFailure =
@@ -165,7 +223,7 @@ export async function confirmReservationAction(formData: FormData): Promise<void
 
   revalidatePath("/admin");
   revalidatePath(`/admin/reservations/${reservationId}`);
-  redirect(`/admin/reservations/${reservationId}`);
+  redirectWithSuccess(`/admin/reservations/${reservationId}`, "confirmed");
 }
 
 export async function rejectReservationAction(formData: FormData): Promise<void> {
@@ -184,5 +242,26 @@ export async function rejectReservationAction(formData: FormData): Promise<void>
   });
 
   revalidatePath("/admin");
-  redirect(`/admin/reservations/${reservationId}`);
+  revalidatePath(`/admin/reservations/${reservationId}`);
+  redirectWithSuccess(`/admin/reservations/${reservationId}`, "rejected");
+}
+
+export async function cancelReservationAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const reservationId = String(formData.get("reservationId") ?? "");
+  if (!reservationId) redirectWithError("/admin", "Reserva inválida.");
+
+  const reservation = await prisma.reservation.findUnique({ where: { id: reservationId } });
+  if (!reservation || !canTransitionReservation(reservation.status, RESERVATION_STATUS.CANCELLED)) {
+    redirectWithError(`/admin/reservations/${reservationId}`, "La reserva no puede cancelarse desde su estado actual.");
+  }
+
+  await prisma.reservation.update({
+    where: { id: reservationId },
+    data: { status: RESERVATION_STATUS.CANCELLED, cancelledAt: new Date() },
+  });
+
+  revalidatePath("/admin");
+  revalidatePath(`/admin/reservations/${reservationId}`);
+  redirectWithSuccess(`/admin/reservations/${reservationId}`, "cancelled");
 }

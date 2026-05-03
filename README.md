@@ -18,7 +18,8 @@ Las versiones npm pedidas fueron verificadas con `npm view`. La verificación de
 - Formulario público que crea reservas `PENDING` con validación Zod.
 - Login admin con bcrypt, JWT firmado y cookie `httpOnly`.
 - Middleware de protección para `/admin`.
-- Dashboard admin con filtros por estado, detalle, confirmación y rechazo.
+- Dashboard admin con histórico, filtros por estado, fecha, cliente/email/teléfono/zona, detalle, confirmación, rechazo y cancelación.
+- Roles de administración: `SUPER_ADMIN` para usuarios/configuración y `ADMIN` para operación de reservas.
 - Confirmación revalida solapamiento, marca `confirmedAt` / `confirmedBy` y envía email.
 - Si el email falla, la reserva queda `CONFIRMED` y se registra `emailError`.
 - Anti-solapamiento en backend y DB con índices únicos parciales PostgreSQL:
@@ -80,8 +81,13 @@ pnpm db:seed
 
 La migración inicial está en `prisma/migrations/000001_init/migration.sql`. Los índices parciales anti-solapamiento están hechos en SQL porque Prisma no expresa índices parciales PostgreSQL desde el schema de forma portable.
 
+## Mantenimiento
+
+La guía de upgrades controlados, Docker-first y CI está en [`docs/maintenance.md`](docs/maintenance.md).
+
 ## Riesgos conocidos
 
 - No se ejecutó `next build` por restricción explícita.
 - SMTP sin configurar provoca fallo de email registrado en `Reservation.emailError`; esto es intencional para no revertir confirmaciones humanas.
-- El login MVP usa credenciales propias con cookie JWT; para producción más compleja se puede migrar a Auth.js si aparecen OAuth, rotación avanzada o múltiples roles.
+- El login usa credenciales propias con cookie JWT y roles internos. Para producción más compleja se puede migrar a Auth.js si aparecen OAuth o rotación avanzada.
+- La configuración SMTP se lee desde variables de entorno. El panel no permite editar password porque guardar secretos en DB requiere cifrado formal.

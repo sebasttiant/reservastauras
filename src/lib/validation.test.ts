@@ -17,6 +17,11 @@ const baseInput = {
   reservationTime: "20:00",
   partySize: "4",
   area: "Patio",
+  reason: "Ocasional",
+  country: "Colombia (+57)",
+  phone: "3001234567",
+  isAdult: "on",
+  dataConsent: "on",
 };
 
 describe("reservationRequestSchema (con reloj fijado a Bogotá borde-de-día)", () => {
@@ -79,6 +84,13 @@ describe("reservationRequestSchema (con reloj fijado a Bogotá borde-de-día)", 
     const tooSmall = reservationRequestSchema.safeParse({ ...baseInput, reservationDate: FAR_FUTURE, partySize: "0" });
     expect(tooBig.success).toBe(false);
     expect(tooSmall.success).toBe(false);
+  });
+
+  it("exige teléfono válido y consentimientos", () => {
+    const invalidPhone = reservationRequestSchema.safeParse({ ...baseInput, reservationDate: FAR_FUTURE, phone: "abc" });
+    const missingConsent = reservationRequestSchema.safeParse({ ...baseInput, reservationDate: FAR_FUTURE, dataConsent: undefined });
+    expect(invalidPhone.success).toBe(false);
+    expect(missingConsent.success).toBe(false);
   });
 });
 
