@@ -58,8 +58,14 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           <p className="muted">Gestioná solicitudes con confirmación humana, trazabilidad y control anti-solapamiento.</p>
         </div>
         <div className="actions">
-          {admin.role === ADMIN_ROLE.SUPER_ADMIN ? <Link className="button secondary" href="/admin/users">Usuarios</Link> : null}
-          {admin.role === ADMIN_ROLE.SUPER_ADMIN ? <Link className="button secondary" href="/admin/settings/email">Correo</Link> : null}
+          {admin.role === ADMIN_ROLE.SUPER_ADMIN ? (
+            <>
+              <Link className="button" href="/api/export?format=xlsx">Exportar Excel</Link>
+              <Link className="button" href="/api/export?format=pdf">Exportar PDF</Link>
+              <Link className="button secondary" href="/admin/users">Usuarios</Link>
+              <Link className="button secondary" href="/admin/settings/email">Correo</Link>
+            </>
+          ) : null}
           <form action={logoutAction}><button className="secondary" type="submit">Salir</button></form>
         </div>
       </header>

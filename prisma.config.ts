@@ -1,10 +1,6 @@
-import { defineConfig, env } from "prisma/config";
+import { defineConfig } from "prisma/config";
 
 const envUrl = process.env.DATABASE_URL;
-
-interface Env {
-  DATABASE_URL: string;
-}
 
 export default defineConfig({
   schema: "prisma/schema.prisma",

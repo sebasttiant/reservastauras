@@ -7,7 +7,7 @@ import { Prisma } from "@prisma/client";
 import { hash } from "bcryptjs";
 import { RESERVATION_STATUS } from "@/lib/constants";
 import { prisma } from "@/lib/db";
-import { sendReservationConfirmationEmail } from "@/lib/email";
+import { sendReservationConfirmationEmail, sendReservationRejectionEmail } from "@/lib/email";
 import { canTransitionReservation } from "@/lib/reservations/state";
 import { createAdminSchema, formDataToRecord, loginSchema, reservationRequestSchema, toggleAdminSchema } from "@/lib/validation";
 import { requireAdmin, requireSuperAdmin, signInAdmin, signOutAdmin } from "@/lib/auth";
@@ -67,7 +67,11 @@ export async function loginAction(formData: FormData): Promise<void> {
   const parsed = loginSchema.safeParse(formDataToRecord(formData));
   if (!parsed.success) redirectWithError("/admin/login", parsed.error.issues[0]?.message ?? "Login inválido.");
 
+  console.log("LOGIN DEBUG:", { email: parsed.data.email, passwordLength: parsed.data.password.length });
+
   const ok = await signInAdmin(parsed.data.email, parsed.data.password);
+  console.log("LOGIN RESULT:", ok);
+
   if (!ok) redirectWithError("/admin/login", "Credenciales inválidas.");
 
   redirect("/admin");
@@ -215,6 +219,8 @@ export async function confirmReservationAction(formData: FormData): Promise<void
       reservationDate: confirmed.reservationDate,
       reservationTime: confirmed.reservationTime,
       area: confirmed.area,
+      confirmedByName: admin.name,
+      confirmedByEmail: admin.email,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error desconocido al enviar email.";
@@ -229,17 +235,35 @@ export async function confirmReservationAction(formData: FormData): Promise<void
 export async function rejectReservationAction(formData: FormData): Promise<void> {
   await requireAdmin();
   const reservationId = String(formData.get("reservationId") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim() || undefined;
   if (!reservationId) redirectWithError("/admin", "Reserva inválida.");
 
-  const reservation = await prisma.reservation.findUnique({ where: { id: reservationId } });
+  const reservation = await prisma.reservation.findUnique({ 
+    where: { id: reservationId },
+    include: { user: true },
+  });
   if (!reservation || !canTransitionReservation(reservation.status, RESERVATION_STATUS.REJECTED)) {
     redirectWithError(`/admin/reservations/${reservationId}`, "La reserva no puede rechazarse.");
   }
 
   await prisma.reservation.update({
     where: { id: reservationId },
-    data: { status: RESERVATION_STATUS.REJECTED, rejectedAt: new Date() },
+    data: { status: RESERVATION_STATUS.REJECTED, rejectedAt: new Date(), notes: reason ? `RECHAZO: ${reason}\n\n${reservation.notes ?? ""}` : reservation.notes },
   });
+
+  try {
+    await sendReservationRejectionEmail({
+      to: reservation.user.email,
+      name: reservation.user.name,
+      reservationDate: reservation.reservationDate,
+      reservationTime: reservation.reservationTime,
+      area: reservation.area,
+      reason: reason,
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error desconocido al enviar email.";
+    await prisma.reservation.update({ where: { id: reservationId }, data: { emailError: message } });
+  }
 
   revalidatePath("/admin");
   revalidatePath(`/admin/reservations/${reservationId}`);

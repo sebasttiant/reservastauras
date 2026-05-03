@@ -11,6 +11,7 @@ export interface AdminSession {
   adminId: string;
   email: string;
   role: AdminRoleValue;
+  name: string;
 }
 
 function getSessionSecret(): Uint8Array {
@@ -18,7 +19,7 @@ function getSessionSecret(): Uint8Array {
 }
 
 export async function createAdminSession(admin: AdminSession): Promise<string> {
-  return new SignJWT({ email: admin.email, role: admin.role })
+  return new SignJWT({ email: admin.email, role: admin.role, name: admin.name })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(admin.adminId)
     .setIssuedAt()
@@ -31,11 +32,12 @@ export async function verifyAdminSession(token: string): Promise<AdminSession | 
     const result = await jwtVerify(token, getSessionSecret());
     const email = result.payload.email;
     const role = result.payload.role;
+    const name = result.payload.name;
 
     if (!result.payload.sub || typeof email !== "string") return null;
     if (role !== ADMIN_ROLE.SUPER_ADMIN && role !== ADMIN_ROLE.ADMIN) return null;
 
-    return { adminId: result.payload.sub, email, role };
+    return { adminId: result.payload.sub, email, role, name: typeof name === "string" ? name : email.split("@")[0] };
   } catch {
     return null;
   }
@@ -48,7 +50,7 @@ export async function signInAdmin(email: string, password: string): Promise<bool
   const passwordMatches = await compare(password, admin.passwordHash);
   if (!passwordMatches) return false;
 
-  const token = await createAdminSession({ adminId: admin.id, email: admin.email, role: admin.role });
+  const token = await createAdminSession({ adminId: admin.id, email: admin.email, role: admin.role, name: admin.name });
   const cookieStore = await cookies();
 
   cookieStore.set(SESSION_COOKIE_NAME, token, {
@@ -77,11 +79,11 @@ export async function getCurrentAdmin(): Promise<AdminSession | null> {
 
   const admin = await prisma.admin.findUnique({
     where: { id: session.adminId },
-    select: { email: true, role: true, isActive: true },
+    select: { email: true, role: true, isActive: true, name: true },
   });
   if (!admin?.isActive) return null;
 
-  return { adminId: session.adminId, email: admin.email, role: admin.role };
+  return { adminId: session.adminId, email: admin.email, role: admin.role, name: admin.name };
 }
 
 export async function requireAdmin(): Promise<AdminSession> {

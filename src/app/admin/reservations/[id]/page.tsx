@@ -83,6 +83,9 @@ export default async function ReservationDetailPage({ params, searchParams }: Re
             {canReject ? (
               <form action={rejectReservationAction}>
                 <input type="hidden" name="reservationId" value={reservation.id} />
+                <label>Motivo del rechazo (opcional)
+                  <input name="reason" placeholder="Ej: Agenda completa, cliente frecuente cancela siempre..." />
+                </label>
                 <button className="danger" type="submit">Rechazar</button>
               </form>
             ) : null}
