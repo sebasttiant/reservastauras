@@ -22,8 +22,10 @@ services:
       dockerfile: Dockerfile
       target: runner
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql://reservas:reservas@db:5432/reservastauras?schema=public}
-      SESSION_SECRET: ${SESSION_SECRET}
+      # Forzado a la red interna `db`. El .env del host suele apuntar a
+      # localhost para desarrollo, así que no lo heredamos acá.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-reservas}:${POSTGRES_PASSWORD:-reservas}@db:5432/${POSTGRES_DB:-reservastauras}?schema=public
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}

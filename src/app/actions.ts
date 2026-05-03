@@ -65,48 +65,90 @@ export async function logoutAction(): Promise<void> {
   redirect("/admin/login");
 }
 
+type ConfirmFailure =
+  | { kind: "not-found" }
+  | { kind: "invalid-state" }
+  | { kind: "overlap" }
+  | { kind: "concurrent-update" };
+
+type ConfirmOutcome =
+  | { ok: true; reservation: Prisma.ReservationGetPayload<{ include: { user: true } }> }
+  | { ok: false; failure: ConfirmFailure };
+
+const CONFIRM_ERROR_MESSAGES: Record<ConfirmFailure["kind"], string> = {
+  "not-found": "Reserva no encontrada.",
+  "invalid-state": "La reserva no puede confirmarse desde su estado actual.",
+  overlap: "Ya existe una reserva confirmada para ese turno.",
+  "concurrent-update": "No pudimos confirmar la reserva por una actualización concurrente. Intentá nuevamente.",
+};
+
 export async function confirmReservationAction(formData: FormData): Promise<void> {
   const admin = await requireAdmin();
   const reservationId = String(formData.get("reservationId") ?? "");
   if (!reservationId) redirectWithError("/admin", "Reserva inválida.");
 
-  const confirmed = await prisma.$transaction(
-    async (tx) => {
-      const reservation = await tx.reservation.findUnique({
-        where: { id: reservationId },
-        include: { user: true },
-      });
+  let outcome: ConfirmOutcome;
+  try {
+    outcome = await prisma.$transaction(
+      async (tx): Promise<ConfirmOutcome> => {
+        const reservation = await tx.reservation.findUnique({ where: { id: reservationId } });
+        if (!reservation) return { ok: false, failure: { kind: "not-found" } };
+        if (!canTransitionReservation(reservation.status, RESERVATION_STATUS.CONFIRMED)) {
+          return { ok: false, failure: { kind: "invalid-state" } };
+        }
 
-      if (!reservation) throw new Error("Reserva no encontrada.");
-      if (!canTransitionReservation(reservation.status, RESERVATION_STATUS.CONFIRMED)) {
-        throw new Error("La reserva no puede confirmarse desde su estado actual.");
+        const overlapping = await tx.reservation.findFirst({
+          where: {
+            id: { not: reservation.id },
+            status: RESERVATION_STATUS.CONFIRMED,
+            reservationDate: reservation.reservationDate,
+            reservationTime: reservation.reservationTime,
+            area: reservation.area,
+          },
+          select: { id: true },
+        });
+        if (overlapping) return { ok: false, failure: { kind: "overlap" } };
+
+        const updated = await tx.reservation.update({
+          where: { id: reservation.id },
+          data: {
+            status: RESERVATION_STATUS.CONFIRMED,
+            confirmedAt: new Date(),
+            confirmedById: admin.adminId,
+            emailError: null,
+          },
+          include: { user: true },
+        });
+        return { ok: true, reservation: updated };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  } catch (error: unknown) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      // P2002: el unique parcial de Postgres atrapa el solapamiento si dos
+      // admins confirman a la vez. P2034: la transacción serializable abortó
+      // por write-conflict o deadlock. En ambos casos volvemos al detalle
+      // con un mensaje accionable, sin reintento automático.
+      if (error.code === "P2002") {
+        outcome = { ok: false, failure: { kind: "overlap" } };
+      } else if (error.code === "P2034") {
+        outcome = { ok: false, failure: { kind: "concurrent-update" } };
+      } else {
+        throw error;
       }
+    } else {
+      throw error;
+    }
+  }
 
-      const overlapping = await tx.reservation.findFirst({
-        where: {
-          id: { not: reservation.id },
-          status: RESERVATION_STATUS.CONFIRMED,
-          reservationDate: reservation.reservationDate,
-          reservationTime: reservation.reservationTime,
-          area: reservation.area,
-        },
-      });
+  if (!outcome.ok) {
+    redirectWithError(
+      `/admin/reservations/${reservationId}`,
+      CONFIRM_ERROR_MESSAGES[outcome.failure.kind],
+    );
+  }
 
-      if (overlapping) throw new Error("Ya existe una reserva confirmada para ese turno.");
-
-      return tx.reservation.update({
-        where: { id: reservation.id },
-        data: {
-          status: RESERVATION_STATUS.CONFIRMED,
-          confirmedAt: new Date(),
-          confirmedById: admin.adminId,
-          emailError: null,
-        },
-        include: { user: true },
-      });
-    },
-    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-  );
+  const confirmed = outcome.reservation;
 
   try {
     await sendReservationConfirmationEmail({

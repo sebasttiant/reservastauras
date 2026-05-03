@@ -33,32 +33,35 @@ cp .env.example .env
 
 Editá al menos:
 
-- `SESSION_SECRET`: mínimo 32 caracteres aleatorios.
-- `ADMIN_EMAIL` y `ADMIN_PASSWORD`: solo necesarios para seed.
-- SMTP (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`) para emails reales.
+- `SESSION_SECRET`: mínimo 32 caracteres aleatorios. Generar con `openssl rand -base64 48`.
+- `ADMIN_EMAIL` y `ADMIN_PASSWORD`: solo necesarios al correr `pnpm db:seed`. La seed exige una contraseña real distinta del placeholder.
+- SMTP (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`) para emails reales. Si `SMTP_HOST` queda vacío, la confirmación humana sigue persistiendo y se registra el error en `Reservation.emailError`.
 
-## Desarrollo local
+`DATABASE_URL` por default apunta a `localhost:5432` para `pnpm dev`. El servicio `web` del `docker-compose.yml` reescribe la URL para usar la red interna `db:5432`, así que no hace falta cambiarla para el flujo full-docker.
+
+## Desarrollo local (Postgres en Docker, Next en host)
 
 ```bash
 corepack enable
 pnpm install
 docker compose up -d db
 pnpm db:generate
-pnpm db:dev
-pnpm db:seed
+pnpm db:dev          # crea/aplica migraciones contra la DB de dev
+pnpm db:seed         # crea el admin inicial
 pnpm dev
 ```
 
 La app pública queda en `http://localhost:3000` y el admin en `http://localhost:3000/admin`.
 
-## Docker-first
+## Docker-first (todo containerizado)
 
 ```bash
 cp .env.example .env
+# Asegurate de tener un SESSION_SECRET real en .env (>=32 caracteres).
 docker compose up --build
 ```
 
-El servicio `web` espera el healthcheck de `db`. Las migraciones de producción se ejecutan explícitamente al arrancar el contenedor con `pnpm db:migrate` antes de iniciar Next.
+El servicio `web` espera el healthcheck de `db`. Las migraciones de producción se ejecutan explícitamente al arrancar el contenedor con `pnpm db:migrate` antes de iniciar Next. La seed se corre por separado contra el contenedor (ej: `docker compose exec web pnpm db:seed`).
 
 ## Comandos útiles
 

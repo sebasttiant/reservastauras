@@ -1,8 +1,30 @@
 import { z } from "zod";
 
+// Zona horaria del negocio. Las reglas calendario (hoy/ayer/futuro) se
+// resuelven contra esta zona, no contra UTC ni la del proceso.
+const BUSINESS_TIMEZONE = "America/Bogota";
+
+const DATE_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: BUSINESS_TIMEZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+function businessTodayDateString(): string {
+  // en-CA produce siempre YYYY-MM-DD, comparable lexicográficamente.
+  return DATE_FORMATTER.format(new Date());
+}
+
+function isTodayOrLaterInBusinessZone(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  return value >= businessTodayDateString();
+}
+
 const dateOnlySchema = z
   .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Usá una fecha válida." });
+  .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Usá una fecha válida." })
+  .refine(isTodayOrLaterInBusinessZone, { error: "La fecha debe ser hoy o futura." });
 
 const timeSchema = z
   .string()
@@ -15,7 +37,11 @@ export const reservationRequestSchema = z.object({
   reservationDate: dateOnlySchema,
   reservationTime: timeSchema,
   area: z.string().trim().max(80).optional(),
-  partySize: z.coerce.number().int().min(1).max(30),
+  partySize: z.coerce
+    .number({ error: "Indicá cuántas personas." })
+    .int({ error: "La cantidad de personas debe ser entera." })
+    .min(1, { error: "Mínimo 1 persona." })
+    .max(30, { error: "Máximo 30 personas." }),
   notes: z.string().trim().max(500).optional(),
 });
 
