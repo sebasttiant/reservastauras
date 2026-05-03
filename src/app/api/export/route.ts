@@ -4,6 +4,42 @@ import { prisma } from "@/lib/db";
 import * as XLSX from "xlsx";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 
+function formatDate(value: Date): string {
+  return value.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function formatDateTime(value: Date | null): string {
+  if (!value) return "-";
+  return value.toLocaleString("es-AR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function splitTextByLength(text: string, maxLength: number): string[] {
+  if (text.length <= maxLength) return [text];
+
+  const words = text.split(" ");
+  const lines: string[] = [];
+  let current = "";
+
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+    if (next.length > maxLength) {
+      if (current) lines.push(current);
+      current = word;
+    } else {
+      current = next;
+    }
+  }
+
+  if (current) lines.push(current);
+  return lines;
+}
+
 export async function GET(request: Request) {
   await requireSuperAdmin();
 
@@ -17,7 +53,7 @@ export async function GET(request: Request) {
 
   const data = reservations.map((r) => ({
     ID: r.id,
-    Fecha: r.reservationDate.toISOString().slice(0, 10),
+    Fecha: formatDate(r.reservationDate),
     Hora: r.reservationTime,
     Cliente: r.user.name,
     Email: r.user.email,
@@ -25,8 +61,13 @@ export async function GET(request: Request) {
     Área: r.area ?? "Sin área",
     Personas: r.partySize,
     Estado: r.status,
-    "Creado en": r.createdAt.toISOString(),
-    "Confirmado por": r.confirmedBy?.email ?? "",
+    "Creada en": formatDateTime(r.createdAt),
+    "Actualizada en": formatDateTime(r.updatedAt),
+    "Confirmada en": formatDateTime(r.confirmedAt),
+    "Rechazada en": formatDateTime(r.rejectedAt),
+    "Cancelada en": formatDateTime(r.cancelledAt),
+    "Confirmado por": r.confirmedBy ? `${r.confirmedBy.name} <${r.confirmedBy.email}>` : "",
+    "Error email": r.emailError ?? "",
     Notas: r.notes ?? "",
   }));
 
@@ -56,14 +97,14 @@ export async function GET(request: Request) {
     const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    const page = pdfDoc.addPage([595.28, 841.89]); // A4
+    let page = pdfDoc.addPage([595.28, 841.89]); // A4
     const { width, height } = page.getSize();
 
     // Colors
     const primaryColor = rgb(0.102, 0.102, 0.18); // #1a1a2e
     const grayColor = rgb(0.4, 0.4, 0.4);
     const lightGray = rgb(0.97, 0.97, 0.97);
-    const white = rgb(1, 1, 1);
+    const borderColor = rgb(0.88, 0.72, 0.08);
 
     let y = height - 60;
 
@@ -158,36 +199,6 @@ export async function GET(request: Request) {
     }
     y -= 15;
 
-    // Table header
-    const colWidths = [60, 50, 90, 110, 40, 60];
-    const headers = ["Fecha", "Hora", "Cliente", "Email", "Pax", "Estado"];
-    const tableX = 40;
-    const rowHeight = 16;
-
-    // Header background
-    page.drawRectangle({
-      x: tableX,
-      y: y - rowHeight + 4,
-      width: width - 80,
-      height: rowHeight,
-      color: primaryColor,
-    });
-
-    // Header text
-    let x = tableX + 5;
-    for (let i = 0; i < headers.length; i++) {
-      page.drawText(headers[i], {
-        x,
-        y: y - rowHeight + 10,
-        size: 9,
-        font: helveticaBold,
-        color: white,
-      });
-      x += colWidths[i];
-    }
-    y -= rowHeight;
-
-    // Table rows
     const statusColors: Record<string, { r: number; g: number; b: number }> = {
       PENDING: { r: 0.96, g: 0.62, b: 0.04 },
       CONFIRMED: { r: 0.06, g: 0.73, b: 0.51 },
@@ -195,44 +206,153 @@ export async function GET(request: Request) {
       CANCELLED: { r: 0.42, g: 0.45, b: 0.5 },
     };
 
-    for (let i = 0; i < data.length; i++) {
-      if (y < 60) {
-        page.drawText("Continúa en siguiente página...", {
-          x: width / 2 - helvetica.widthOfTextAtSize("Continúa en siguiente página...", 10) / 2,
-          y: 30,
-          size: 10,
+    const ensureSpace = (neededHeight: number) => {
+      if (y - neededHeight < 70) {
+        page.drawText("Continúa en la siguiente página...", {
+          x: width / 2 - helvetica.widthOfTextAtSize("Continúa en la siguiente página...", 9) / 2,
+          y: 35,
+          size: 9,
           font: helvetica,
           color: grayColor,
         });
-        break;
+        page = pdfDoc.addPage([595.28, 841.89]);
+        y = height - 50;
       }
+    };
 
-      const row = data[i];
-      const bgColor = i % 2 === 0 ? lightGray : white;
-      page.drawRectangle({
-        x: tableX,
-        y: y - rowHeight + 4,
-        width: width - 80,
-        height: rowHeight,
-        color: bgColor,
+    const drawField = (label: string, value: string, x: number, fieldY: number, maxChars = 44) => {
+      page.drawText(label.toUpperCase(), {
+        x,
+        y: fieldY,
+        size: 7,
+        font: helveticaBold,
+        color: rgb(0.45, 0.45, 0.45),
       });
 
-      x = tableX + 5;
-      const statusColor = statusColors[row.Estado] || { r: 0.3, g: 0.3, b: 0.3 };
-      const cols = [row.Fecha, row.Hora, row.Cliente.substring(0, 12), row.Email.substring(0, 18), String(row.Personas), statusLabels[row.Estado] || row.Estado];
-      
-      for (let j = 0; j < cols.length; j++) {
-        const colColor = j === cols.length - 1 ? rgb(statusColor.r, statusColor.g, statusColor.b) : grayColor;
-        page.drawText(cols[j], {
+      const lines = splitTextByLength(value || "-", maxChars);
+      let lineY = fieldY - 11;
+      for (const line of lines) {
+        page.drawText(line, {
           x,
-          y: y - rowHeight + 10,
-          size: 8,
+          y: lineY,
+          size: 9,
           font: helvetica,
-          color: colColor,
+          color: grayColor,
         });
-        x += colWidths[j];
+        lineY -= 11;
       }
-      y -= rowHeight;
+    };
+
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      const notesLines = splitTextByLength(row.Notas || "-", 95);
+      const emailErrorLines = splitTextByLength(row["Error email"] || "-", 95);
+      const dynamicHeight = 170 + (notesLines.length * 11) + (emailErrorLines.length > 1 ? emailErrorLines.length * 11 : 0);
+
+      ensureSpace(dynamicHeight);
+
+      const statusColor = statusColors[row.Estado] || { r: 0.3, g: 0.3, b: 0.3 };
+
+      page.drawRectangle({
+        x: 40,
+        y: y - dynamicHeight + 10,
+        width: width - 80,
+        height: dynamicHeight,
+        color: lightGray,
+        borderColor,
+        borderWidth: 0.75,
+      });
+
+      page.drawText(`Reserva #${i + 1}`, {
+        x: 55,
+        y: y - 15,
+        size: 12,
+        font: helveticaBold,
+        color: primaryColor,
+      });
+
+      page.drawText(statusLabels[row.Estado] || row.Estado, {
+        x: width - 160,
+        y: y - 15,
+        size: 11,
+        font: helveticaBold,
+        color: rgb(statusColor.r, statusColor.g, statusColor.b),
+      });
+
+      const leftX = 55;
+      const rightX = 300;
+      let fieldY = y - 38;
+
+      drawField("Cliente", row.Cliente, leftX, fieldY, 40);
+      drawField("Email", row.Email, rightX, fieldY, 42);
+      fieldY -= 34;
+
+      drawField("Teléfono", row.Teléfono || "-", leftX, fieldY, 40);
+      drawField("Personas", String(row.Personas), rightX, fieldY, 42);
+      fieldY -= 34;
+
+      drawField("Fecha", row.Fecha, leftX, fieldY, 40);
+      drawField("Hora", row.Hora, rightX, fieldY, 42);
+      fieldY -= 34;
+
+      drawField("Área", row.Área, leftX, fieldY, 40);
+      drawField("Creada en", row["Creada en"], rightX, fieldY, 42);
+      fieldY -= 34;
+
+      drawField("Confirmado por", row["Confirmado por"] || "-", leftX, fieldY, 95);
+      fieldY -= 34;
+
+      const movementInfo = [
+        row["Confirmada en"] !== "-" ? `Confirmada: ${row["Confirmada en"]}` : null,
+        row["Rechazada en"] !== "-" ? `Rechazada: ${row["Rechazada en"]}` : null,
+        row["Cancelada en"] !== "-" ? `Cancelada: ${row["Cancelada en"]}` : null,
+      ].filter(Boolean).join(" | ") || "-";
+
+      drawField("Movimientos", movementInfo, leftX, fieldY, 95);
+      fieldY -= 34;
+
+      page.drawText("NOTAS", {
+        x: leftX,
+        y: fieldY,
+        size: 7,
+        font: helveticaBold,
+        color: rgb(0.45, 0.45, 0.45),
+      });
+      fieldY -= 11;
+      for (const line of notesLines) {
+        page.drawText(line, {
+          x: leftX,
+          y: fieldY,
+          size: 9,
+          font: helvetica,
+          color: grayColor,
+        });
+        fieldY -= 11;
+      }
+
+      if (row["Error email"]) {
+        fieldY -= 5;
+        page.drawText("ERROR DE EMAIL", {
+          x: leftX,
+          y: fieldY,
+          size: 7,
+          font: helveticaBold,
+          color: rgb(0.9, 0.2, 0.2),
+        });
+        fieldY -= 11;
+        for (const line of emailErrorLines) {
+          page.drawText(line, {
+            x: leftX,
+            y: fieldY,
+            size: 9,
+            font: helvetica,
+            color: rgb(0.65, 0.15, 0.15),
+          });
+          fieldY -= 11;
+        }
+      }
+
+      y -= dynamicHeight + 16;
     }
 
     // Footer

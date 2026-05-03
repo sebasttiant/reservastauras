@@ -67,11 +67,7 @@ export async function loginAction(formData: FormData): Promise<void> {
   const parsed = loginSchema.safeParse(formDataToRecord(formData));
   if (!parsed.success) redirectWithError("/admin/login", parsed.error.issues[0]?.message ?? "Login inválido.");
 
-  console.log("LOGIN DEBUG:", { email: parsed.data.email, passwordLength: parsed.data.password.length });
-
   const ok = await signInAdmin(parsed.data.email, parsed.data.password);
-  console.log("LOGIN RESULT:", ok);
-
   if (!ok) redirectWithError("/admin/login", "Credenciales inválidas.");
 
   redirect("/admin");
