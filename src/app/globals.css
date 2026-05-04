@@ -157,6 +157,12 @@ input, textarea, select {
   min-height: 44px;
   outline: none;
   transition: border-color .18s ease, box-shadow .18s ease, background-color .18s ease;
+  /* El :root usa color-scheme: dark para el resto del sitio. Acá lo
+     forzamos a light porque los inputs tienen fondo claro: sin esto, los
+     widgets internos del UA (placeholder de input[type=date], picker
+     indicator, autocomplete) se renderizan con texto blanco e ícono
+     blanco sobre fondo blanco. */
+  color-scheme: light;
 }
 
 input:focus, textarea:focus, select:focus {
@@ -170,6 +176,23 @@ input[type="checkbox"] {
   width: 18px;
   height: 18px;
   accent-color: var(--brand);
+}
+
+/* Usamos el ícono nativo del browser (::-webkit-calendar-picker-indicator)
+   porque es el único clickable. Un background-image SVG sólo decora y
+   confunde: queda un ícono extra al lado del nativo. */
+input[type="date"] {
+  cursor: pointer;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: .65;
+  transition: opacity .18s ease;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
 }
 
 .consent-grid { display: grid; gap: 10px; }

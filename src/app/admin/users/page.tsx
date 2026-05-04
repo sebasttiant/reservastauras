@@ -2,6 +2,7 @@ import { ADMIN_ROLE } from "@/lib/constants";
 import { createAdminAction, toggleAdminActiveAction } from "@/app/actions";
 import { prisma } from "@/lib/db";
 import { requireSuperAdmin } from "@/lib/auth";
+import { ADMIN_USERS_ERROR_MESSAGES, lookupMessage } from "@/lib/messages";
 
 interface AdminUsersPageProps {
   searchParams: Promise<Record<string, string | undefined>>;
@@ -21,6 +22,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
   const params = await searchParams;
   const admins = await prisma.admin.findMany({ orderBy: [{ role: "desc" }, { createdAt: "asc" }] });
   const successMessage = params.ok ? SUCCESS_MESSAGES[params.ok] : undefined;
+  const errorMessage = lookupMessage(ADMIN_USERS_ERROR_MESSAGES, params.error);
 
   return (
     <main className="admin-shell">
@@ -34,7 +36,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
       </header>
 
       {successMessage ? <p className="notice">{successMessage}</p> : null}
-      {params.error ? <p className="notice error">{params.error}</p> : null}
+      {errorMessage ? <p className="notice error">{errorMessage}</p> : null}
 
       <section className="card grid">
         <div className="section-heading">
