@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireSuperAdmin } from "@/lib/auth";
+import { AUDIT_EVENT, recordAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/db";
+import { getRequestSecurityContext } from "@/lib/security/request";
 import * as XLSX from "xlsx";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 
@@ -41,10 +43,14 @@ function splitTextByLength(text: string, maxLength: number): string[] {
 }
 
 export async function GET(request: Request) {
-  await requireSuperAdmin();
+  const admin = await requireSuperAdmin();
 
   const { searchParams } = new URL(request.url);
   const format = searchParams.get("format") || "xlsx";
+
+  if (format !== "json" && format !== "xlsx" && format !== "pdf") {
+    return new NextResponse("Formato no válido", { status: 400 });
+  }
 
   const reservations = await prisma.reservation.findMany({
     orderBy: [{ reservationDate: "desc" }, { reservationTime: "desc" }, { createdAt: "desc" }],
@@ -70,6 +76,14 @@ export async function GET(request: Request) {
     "Error email": r.emailError ?? "",
     Notas: r.notes ?? "",
   }));
+
+  await recordAuditLog({
+    event: AUDIT_EVENT.RESERVATIONS_EXPORTED,
+    actor: admin,
+    request: getRequestSecurityContext(request.headers),
+    resourceType: "RESERVATION_EXPORT",
+    metadata: { format, count: reservations.length },
+  });
 
   if (format === "json") {
     return NextResponse.json(data, {

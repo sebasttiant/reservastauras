@@ -2,11 +2,14 @@ services:
   db:
     image: postgres:18-alpine
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-reservas}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-reservas}
-      POSTGRES_DB: ${POSTGRES_DB:-reservastauras}
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+    # Sin `ports`: la DB queda accesible sólo dentro de la red interna del compose.
+    # Para acceder desde el host (psql, GUIs en dev), descomentar y mantener el
+    # bind a 127.0.0.1 — nunca exponer a 0.0.0.0.
+    # ports:
+    #   - "127.0.0.1:5432:5432"
     volumes:
       # Postgres 18 stores data in a major-versioned subdirectory. Mount the
       # parent directory, not /var/lib/postgresql/data, to avoid startup errors.
@@ -17,6 +20,18 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # Lo mínimo que necesita el entrypoint oficial de postgres para chown del
+      # data dir e iniciar el daemon como usuario `postgres`.
+      - CHOWN
+      - SETGID
+      - SETUID
+      - DAC_READ_SEARCH
+      - FOWNER
 
   web:
     build:
@@ -24,23 +39,40 @@ services:
       dockerfile: Dockerfile
       target: runner
     environment:
-      # Forzado a la red interna `db`. El .env del host suele apuntar a
-      # localhost para desarrollo, así que no lo heredamos acá.
-      DATABASE_URL: postgresql://${POSTGRES_USER:-reservas}:${POSTGRES_PASSWORD:-reservas}@db:5432/${POSTGRES_DB:-reservastauras}?schema=public
+      # DATABASE_URL se construye a partir de las credenciales del contenedor de
+      # Postgres y la red interna `db`. No heredamos DATABASE_URL del host porque
+      # en dev suele apuntar a localhost y rompería la conexión dentro del compose.
+      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@db:5432/${POSTGRES_DB:?POSTGRES_DB is required}?schema=public
       SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-Reservas Tauras <reservas@example.com>}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@ilasesorias.com}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Infoseg.00*2026*}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      # ADMIN_PASSWORD sólo se usa en `pnpm db:seed`. Igual lo exigimos para que
+      # el contenedor nunca arranque con una password trivial heredada.
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD is required (used by db:seed)}
     depends_on:
       db:
         condition: service_healthy
     ports:
       - "3000:3000"
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "require('http').get('http://127.0.0.1:3000/', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
 volumes:
   postgres-data:
