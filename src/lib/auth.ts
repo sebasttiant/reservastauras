@@ -29,8 +29,13 @@ function getSessionSecret(): Uint8Array {
 // el módulo para que el primer login no pague el cómputo.
 const dummyHashPromise: Promise<string> = hash("not-a-real-password-just-padding", 12);
 
+// El JWT lleva sólo el `sub` (adminId). Email, name y role son mutables —
+// si los firmamos en el token, una sesión vieja queda con datos stale tras
+// un cambio de rol o nombre. Resolvemos eso leyendo siempre de DB en
+// `getCurrentAdmin`. Mantener el payload mínimo elimina la tentación de
+// confiar en él.
 export async function createAdminSession(admin: AdminSession): Promise<string> {
-  return new SignJWT({ email: admin.email, role: admin.role, name: admin.name })
+  return new SignJWT({})
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(admin.adminId)
     .setIssuedAt()
@@ -38,17 +43,16 @@ export async function createAdminSession(admin: AdminSession): Promise<string> {
     .sign(getSessionSecret());
 }
 
-export async function verifyAdminSession(token: string): Promise<AdminSession | null> {
+export interface VerifiedAdminSession {
+  adminId: string;
+}
+
+export async function verifyAdminSession(token: string): Promise<VerifiedAdminSession | null> {
   try {
     const result = await jwtVerify(token, getSessionSecret());
-    const email = result.payload.email;
-    const role = result.payload.role;
-    const name = result.payload.name;
-
-    if (!result.payload.sub || typeof email !== "string") return null;
-    if (role !== ADMIN_ROLE.SUPER_ADMIN && role !== ADMIN_ROLE.ADMIN) return null;
-
-    return { adminId: result.payload.sub, email, role, name: typeof name === "string" ? name : email.split("@")[0] };
+    const sub = result.payload.sub;
+    if (typeof sub !== "string" || sub.length === 0) return null;
+    return { adminId: sub };
   } catch {
     return null;
   }

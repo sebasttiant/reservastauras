@@ -1,4 +1,5 @@
 import { createReservationAction } from "@/app/actions";
+import { PUBLIC_ERROR_MESSAGES, lookupMessage } from "@/lib/messages";
 
 const RESERVATION_TIMES = [
   "11:00", "11:30", "12:00", "12:30", "13:00", "13:30", "14:00", "14:30",
@@ -22,6 +23,7 @@ interface HomePageProps {
 
 export default async function HomePage({ searchParams }: HomePageProps) {
   const params = await searchParams;
+  const errorMessage = lookupMessage(PUBLIC_ERROR_MESSAGES, params.error);
 
   return (
     <>
@@ -48,7 +50,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             </div>
 
             {params.created ? <p className="notice">Recibimos tu solicitud. En breve, una persona del equipo se comunicará contigo para confirmar disponibilidad.</p> : null}
-            {params.error ? <p className="notice error">{params.error}</p> : null}
+            {errorMessage ? <p className="notice error">{errorMessage}</p> : null}
 
             <form action={createReservationAction} className="grid">
               <div className="grid two">

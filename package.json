@@ -18,7 +18,9 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:dev": "prisma migrate dev",
-    "db:seed": "tsx --env-file-if-exists=.env prisma/seed.ts"
+    "db:seed": "tsx --env-file-if-exists=.env prisma/seed.ts",
+    "scripts:check-env": "tsx scripts/check-env.ts",
+    "scripts:purge-login-attempts": "tsx scripts/purge-login-attempts.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.8.0",

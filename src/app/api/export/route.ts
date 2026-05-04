@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { requireSuperAdmin } from "@/lib/auth";
 import { AUDIT_EVENT, recordAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/db";
@@ -40,6 +42,14 @@ function splitTextByLength(text: string, maxLength: number): string[] {
 
   if (current) lines.push(current);
   return lines;
+}
+
+// Respeta saltos de línea explícitos (\n) ANTES de wrappear por largo.
+// `notes` viene de buildReservationNotes con `\n` entre Motivo/País/Especificaciones,
+// y splitTextByLength por sí solo no los detecta — los pinta con \n adentro y el
+// alto calculado queda corto, sacando contenido fuera del marco.
+function wrapText(text: string, maxLength: number): string[] {
+  return text.split("\n").flatMap((line) => splitTextByLength(line, maxLength));
 }
 
 export async function GET(request: Request) {
@@ -106,39 +116,78 @@ export async function GET(request: Request) {
 
   if (format === "pdf") {
     const pdfDoc = await PDFDocument.create();
-    
-    // Embedded font - no external files needed
+
     const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+    // Logo embebido. Si no se puede leer (deploy roto, permisos), seguimos
+    // sin él en lugar de romper la export — un PDF sin logo es preferible a
+    // una export que devuelve 500.
+    let logoImage: Awaited<ReturnType<typeof pdfDoc.embedPng>> | null = null;
+    try {
+      const logoPath = path.join(process.cwd(), "public", "tauras.png");
+      const logoBytes = await readFile(logoPath);
+      logoImage = await pdfDoc.embedPng(logoBytes);
+    } catch {
+      logoImage = null;
+    }
 
     let page = pdfDoc.addPage([595.28, 841.89]); // A4
     const { width, height } = page.getSize();
 
-    // Colors
     const primaryColor = rgb(0.102, 0.102, 0.18); // #1a1a2e
     const grayColor = rgb(0.4, 0.4, 0.4);
     const lightGray = rgb(0.97, 0.97, 0.97);
     const borderColor = rgb(0.88, 0.72, 0.08);
 
-    let y = height - 60;
+    let y = height - 50;
 
-    // Header
+    // Header tipo letterhead: nombre alineado a la izquierda, logo a la
+    // derecha, ambos centrados verticalmente en la banda. Antes el logo iba
+    // centrado encima del texto y duplicaba la marca con el "TAURAS" de abajo.
+    const titleSize = 22;
+    const subtitleSize = 11;
+    const titleGap = 6;
+    const titleBlockH = titleSize + titleGap + subtitleSize;
+
+    let logoTargetHeight = 0;
+    let logoTargetWidth = 0;
+    if (logoImage) {
+      logoTargetWidth = 70;
+      const logoScale = logoTargetWidth / logoImage.width;
+      logoTargetHeight = logoImage.height * logoScale;
+    }
+
+    const headerH = Math.max(logoTargetHeight, titleBlockH);
+    const sideMargin = 50;
+    const titleTop = y - (headerH - titleBlockH) / 2;
+
     page.drawText("TAURAS", {
-      x: width / 2 - helveticaBold.widthOfTextAtSize("TAURAS", 22) / 2,
-      y,
-      size: 22,
+      x: sideMargin,
+      y: titleTop - titleSize,
+      size: titleSize,
       font: helveticaBold,
       color: primaryColor,
     });
-    y -= 25;
     page.drawText("Restaurante & Bar", {
-      x: width / 2 - helvetica.widthOfTextAtSize("Restaurante & Bar", 12) / 2,
-      y,
-      size: 12,
+      x: sideMargin,
+      y: titleTop - titleSize - titleGap - subtitleSize,
+      size: subtitleSize,
       font: helvetica,
       color: grayColor,
     });
-    y -= 40;
+
+    if (logoImage) {
+      const logoTop = y - (headerH - logoTargetHeight) / 2;
+      page.drawImage(logoImage, {
+        x: width - sideMargin - logoTargetWidth,
+        y: logoTop - logoTargetHeight,
+        width: logoTargetWidth,
+        height: logoTargetHeight,
+      });
+    }
+
+    y -= headerH + 24;
 
     // Title
     page.drawText("REPORTE DE RESERVAS", {
@@ -234,7 +283,14 @@ export async function GET(request: Request) {
       }
     };
 
-    const drawField = (label: string, value: string, x: number, fieldY: number, maxChars = 44) => {
+    // Layout constants. Cada row de campo ocupa: label(11) + lines*lineH + gapEntreRows(12).
+    const labelH = 11;
+    const lineH = 11;
+    const rowGap = 12;
+    const rowSpace = (maxLines: number) => labelH + Math.max(maxLines, 1) * lineH + rowGap;
+
+    const drawField = (label: string, value: string, x: number, fieldY: number, maxChars: number): number => {
+      const lines = wrapText(value || "-", maxChars);
       page.drawText(label.toUpperCase(), {
         x,
         y: fieldY,
@@ -242,26 +298,50 @@ export async function GET(request: Request) {
         font: helveticaBold,
         color: rgb(0.45, 0.45, 0.45),
       });
-
-      const lines = splitTextByLength(value || "-", maxChars);
-      let lineY = fieldY - 11;
+      let lineY = fieldY - labelH;
       for (const line of lines) {
-        page.drawText(line, {
-          x,
-          y: lineY,
-          size: 9,
-          font: helvetica,
-          color: grayColor,
-        });
-        lineY -= 11;
+        page.drawText(line, { x, y: lineY, size: 9, font: helvetica, color: grayColor });
+        lineY -= lineH;
       }
+      return lines.length;
     };
 
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
-      const notesLines = splitTextByLength(row.Notas || "-", 95);
-      const emailErrorLines = splitTextByLength(row["Error email"] || "-", 95);
-      const dynamicHeight = 170 + (notesLines.length * 11) + (emailErrorLines.length > 1 ? emailErrorLines.length * 11 : 0);
+
+      const movementInfo = [
+        row["Confirmada en"] !== "-" ? `Confirmada: ${row["Confirmada en"]}` : null,
+        row["Rechazada en"] !== "-" ? `Rechazada: ${row["Rechazada en"]}` : null,
+        row["Cancelada en"] !== "-" ? `Cancelada: ${row["Cancelada en"]}` : null,
+      ].filter(Boolean).join(" | ") || "-";
+
+      // Pre-calcular líneas reales de cada campo: la altura del card depende
+      // de wrap + saltos explícitos (\n en notes), no de un valor fijo.
+      const linesCliente = wrapText(row.Cliente, 40).length;
+      const linesEmail = wrapText(row.Email, 42).length;
+      const linesTel = wrapText(row.Teléfono || "-", 40).length;
+      const linesPersonas = 1;
+      const linesFecha = 1;
+      const linesHora = 1;
+      const linesArea = wrapText(row.Área, 40).length;
+      const linesCreada = 1;
+      const linesConfirmado = wrapText(row["Confirmado por"] || "-", 95).length;
+      const linesMov = wrapText(movementInfo, 95).length;
+      const notesLines = wrapText(row.Notas || "-", 95);
+      const emailErrorLines = row["Error email"] ? wrapText(row["Error email"], 95) : [];
+
+      const headerH = 28;
+      const pairsH =
+        rowSpace(Math.max(linesCliente, linesEmail)) +
+        rowSpace(Math.max(linesTel, linesPersonas)) +
+        rowSpace(Math.max(linesFecha, linesHora)) +
+        rowSpace(Math.max(linesArea, linesCreada));
+      const confirmedH = rowSpace(linesConfirmado);
+      const movementsH = rowSpace(linesMov);
+      const notesH = labelH + notesLines.length * lineH;
+      const errorH = emailErrorLines.length > 0 ? 6 + labelH + emailErrorLines.length * lineH : 0;
+      const bottomPad = 14;
+      const dynamicHeight = headerH + pairsH + confirmedH + movementsH + notesH + errorH + bottomPad;
 
       ensureSpace(dynamicHeight);
 
@@ -269,7 +349,7 @@ export async function GET(request: Request) {
 
       page.drawRectangle({
         x: 40,
-        y: y - dynamicHeight + 10,
+        y: y - dynamicHeight,
         width: width - 80,
         height: dynamicHeight,
         color: lightGray,
@@ -279,15 +359,17 @@ export async function GET(request: Request) {
 
       page.drawText(`Reserva #${i + 1}`, {
         x: 55,
-        y: y - 15,
+        y: y - 18,
         size: 12,
         font: helveticaBold,
         color: primaryColor,
       });
 
-      page.drawText(statusLabels[row.Estado] || row.Estado, {
-        x: width - 160,
-        y: y - 15,
+      const statusLabel = statusLabels[row.Estado] || row.Estado;
+      const statusWidth = helveticaBold.widthOfTextAtSize(statusLabel, 11);
+      page.drawText(statusLabel, {
+        x: width - 55 - statusWidth,
+        y: y - 18,
         size: 11,
         font: helveticaBold,
         color: rgb(statusColor.r, statusColor.g, statusColor.b),
@@ -295,35 +377,39 @@ export async function GET(request: Request) {
 
       const leftX = 55;
       const rightX = 300;
-      let fieldY = y - 38;
+      let fieldY = y - headerH - 10;
 
-      drawField("Cliente", row.Cliente, leftX, fieldY, 40);
-      drawField("Email", row.Email, rightX, fieldY, 42);
-      fieldY -= 34;
+      const drawPair = (
+        l: { label: string; value: string; max: number },
+        r: { label: string; value: string; max: number },
+      ) => {
+        const linesL = drawField(l.label, l.value, leftX, fieldY, l.max);
+        const linesR = drawField(r.label, r.value, rightX, fieldY, r.max);
+        fieldY -= rowSpace(Math.max(linesL, linesR));
+      };
 
-      drawField("Teléfono", row.Teléfono || "-", leftX, fieldY, 40);
-      drawField("Personas", String(row.Personas), rightX, fieldY, 42);
-      fieldY -= 34;
+      drawPair(
+        { label: "Cliente", value: row.Cliente, max: 40 },
+        { label: "Email", value: row.Email, max: 42 },
+      );
+      drawPair(
+        { label: "Teléfono", value: row.Teléfono || "-", max: 40 },
+        { label: "Personas", value: String(row.Personas), max: 42 },
+      );
+      drawPair(
+        { label: "Fecha", value: row.Fecha, max: 40 },
+        { label: "Hora", value: row.Hora, max: 42 },
+      );
+      drawPair(
+        { label: "Área", value: row.Área, max: 40 },
+        { label: "Creada en", value: row["Creada en"], max: 42 },
+      );
 
-      drawField("Fecha", row.Fecha, leftX, fieldY, 40);
-      drawField("Hora", row.Hora, rightX, fieldY, 42);
-      fieldY -= 34;
+      const linesC = drawField("Confirmado por", row["Confirmado por"] || "-", leftX, fieldY, 95);
+      fieldY -= rowSpace(linesC);
 
-      drawField("Área", row.Área, leftX, fieldY, 40);
-      drawField("Creada en", row["Creada en"], rightX, fieldY, 42);
-      fieldY -= 34;
-
-      drawField("Confirmado por", row["Confirmado por"] || "-", leftX, fieldY, 95);
-      fieldY -= 34;
-
-      const movementInfo = [
-        row["Confirmada en"] !== "-" ? `Confirmada: ${row["Confirmada en"]}` : null,
-        row["Rechazada en"] !== "-" ? `Rechazada: ${row["Rechazada en"]}` : null,
-        row["Cancelada en"] !== "-" ? `Cancelada: ${row["Cancelada en"]}` : null,
-      ].filter(Boolean).join(" | ") || "-";
-
-      drawField("Movimientos", movementInfo, leftX, fieldY, 95);
-      fieldY -= 34;
+      const linesM = drawField("Movimientos", movementInfo, leftX, fieldY, 95);
+      fieldY -= rowSpace(linesM);
 
       page.drawText("NOTAS", {
         x: leftX,
@@ -332,20 +418,14 @@ export async function GET(request: Request) {
         font: helveticaBold,
         color: rgb(0.45, 0.45, 0.45),
       });
-      fieldY -= 11;
+      fieldY -= labelH;
       for (const line of notesLines) {
-        page.drawText(line, {
-          x: leftX,
-          y: fieldY,
-          size: 9,
-          font: helvetica,
-          color: grayColor,
-        });
-        fieldY -= 11;
+        page.drawText(line, { x: leftX, y: fieldY, size: 9, font: helvetica, color: grayColor });
+        fieldY -= lineH;
       }
 
-      if (row["Error email"]) {
-        fieldY -= 5;
+      if (emailErrorLines.length > 0) {
+        fieldY -= 6;
         page.drawText("ERROR DE EMAIL", {
           x: leftX,
           y: fieldY,
@@ -353,7 +433,7 @@ export async function GET(request: Request) {
           font: helveticaBold,
           color: rgb(0.9, 0.2, 0.2),
         });
-        fieldY -= 11;
+        fieldY -= labelH;
         for (const line of emailErrorLines) {
           page.drawText(line, {
             x: leftX,
@@ -362,7 +442,7 @@ export async function GET(request: Request) {
             font: helvetica,
             color: rgb(0.65, 0.15, 0.15),
           });
-          fieldY -= 11;
+          fieldY -= lineH;
         }
       }
 

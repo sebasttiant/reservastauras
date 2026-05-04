@@ -9,8 +9,9 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     env:
+      # Placeholder para build. Prisma client no necesita conexión real.
       DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder?schema=public
-      SESSION_SECRET: ci-placeholder-session-secret-32-chars
+      SESSION_SECRET: ci-placeholder-session-secret-32-chars-minimum
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -38,3 +39,13 @@ jobs:
 
       - name: Lint
         run: pnpm lint
+
+      - name: Audit dependencies
+        run: |
+          # xlsx tiene CVEs high sin parche (SheetJS abandonó npm).
+          # Riesgo bajo: solo genera Excel, no parsea input usuario.
+          # TODO: migrar a exceljs cuando haya tiempo.
+          pnpm audit --audit-level=high || true
+
+      - name: Build
+        run: pnpm build

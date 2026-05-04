@@ -4,6 +4,7 @@ import { logoutAction } from "@/app/actions";
 import { ADMIN_ROLE, RESERVATION_STATUS } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
+import { ADMIN_ERROR_MESSAGES, lookupMessage } from "@/lib/messages";
 
 interface AdminPageProps {
   searchParams: Promise<Record<string, string | undefined>>;
@@ -48,6 +49,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
   const summary = await prisma.reservation.groupBy({ by: ["status"], _count: { status: true } });
   const counts = new Map(summary.map((item) => [item.status, item._count.status]));
+  const errorMessage = lookupMessage(ADMIN_ERROR_MESSAGES, params.error);
 
   return (
     <main className="admin-shell">
@@ -70,7 +72,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         </div>
       </header>
 
-      {params.error ? <p className="notice error">{params.error}</p> : null}
+      {errorMessage ? <p className="notice error">{errorMessage}</p> : null}
 
       <nav className="actions card filters">
         <Link href="/admin">Todas</Link>

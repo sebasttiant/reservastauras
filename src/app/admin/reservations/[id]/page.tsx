@@ -5,6 +5,7 @@ import { RESERVATION_STATUS } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { canTransitionReservation } from "@/lib/reservations/state";
 import { requireAdmin } from "@/lib/auth";
+import { RESERVATION_DETAIL_ERROR_MESSAGES, lookupMessage } from "@/lib/messages";
 
 interface ReservationDetailPageProps {
   params: Promise<{ id: string }>;
@@ -38,6 +39,7 @@ export default async function ReservationDetailPage({ params, searchParams }: Re
   if (!reservation) notFound();
 
   const successMessage = query.ok ? SUCCESS_MESSAGES[query.ok] : undefined;
+  const errorMessage = lookupMessage(RESERVATION_DETAIL_ERROR_MESSAGES, query.error);
   const canConfirm = canTransitionReservation(reservation.status, RESERVATION_STATUS.CONFIRMED)
     && reservation.status !== RESERVATION_STATUS.CONFIRMED;
   const canReject = canTransitionReservation(reservation.status, RESERVATION_STATUS.REJECTED)
@@ -60,7 +62,7 @@ export default async function ReservationDetailPage({ params, searchParams }: Re
         </div>
 
         {successMessage ? <p className="notice">{successMessage}</p> : null}
-        {query.error ? <p className="notice error">{query.error}</p> : null}
+        {errorMessage ? <p className="notice error">{errorMessage}</p> : null}
         {reservation.emailError ? <p className="notice error">Confirmada, pero falló el email: {reservation.emailError}</p> : null}
 
         <dl className="grid two">

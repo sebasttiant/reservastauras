@@ -14,11 +14,9 @@ import { createAdminSchema, formDataToRecord, loginSchema, reservationRequestSch
 import { requireAdmin, requireSuperAdmin, signInAdmin, signOutAdmin } from "@/lib/auth";
 import { getClientIp } from "@/lib/auth/client-ip";
 import { checkLoginAllowed, normalizeEmailKey, recordLoginAttempt } from "@/lib/auth/rate-limit";
+import { checkReservationRateLimit } from "@/lib/auth/reservation-rate-limit";
 import { AUDIT_EVENT, recordAuditLog } from "@/lib/audit";
 import { getRequestSecurityContext, isValidAdminMutationOrigin } from "@/lib/security/request";
-
-const GENERIC_LOGIN_ERROR = "Credenciales inválidas.";
-const THROTTLED_LOGIN_ERROR = "Demasiados intentos. Probá en unos minutos.";
 
 function toDateOnly(value: string): Date {
   return new Date(`${value}T00:00:00.000Z`);
@@ -34,8 +32,12 @@ function buildReservationNotes(reason: string, country: string, notes: string | 
   return [`Motivo: ${reason}`, `País: ${country}`, `Especificaciones: ${extra}`].join("\n");
 }
 
-function redirectWithError(path: string, message: string): never {
-  const query = new URLSearchParams({ error: message });
+// `errorKey` es siempre un identificador opaco del allowlist en
+// `src/lib/messages.ts`. NUNCA se acepta texto libre acá: la URL es un
+// canal controlado por el atacante y el cliente sólo debe pintar mensajes
+// que el server reconoce.
+function redirectWithError(path: string, errorKey: string): never {
+  const query = new URLSearchParams({ error: errorKey });
   redirect(`${path}?${query.toString()}` as Route);
 }
 
@@ -47,15 +49,22 @@ function redirectWithSuccess(path: string, key: string): never {
 async function requireValidAdminMutationRequest(path: string): Promise<Headers> {
   const requestHeaders = await headers();
   if (!isValidAdminMutationOrigin(requestHeaders)) {
-    redirectWithError(path, "Solicitud inválida. Recargá la página e intentá nuevamente.");
+    redirectWithError(path, "invalid-request");
   }
 
   return requestHeaders;
 }
 
 export async function createReservationAction(formData: FormData): Promise<void> {
+  const requestHeaders = await headers();
+  const ipKey = getClientIp(requestHeaders);
+  const rateCheck = checkReservationRateLimit({ ipKey });
+  if (!rateCheck.allowed) {
+    redirectWithError("/", "rate-limited");
+  }
+
   const parsed = reservationRequestSchema.safeParse(formDataToRecord(formData));
-  if (!parsed.success) redirectWithError("/", parsed.error.issues[0]?.message ?? "Datos inválidos.");
+  if (!parsed.success) redirectWithError("/", "invalid-data");
 
   const input = parsed.data;
   const user = await prisma.user.upsert({
@@ -82,7 +91,7 @@ export async function createReservationAction(formData: FormData): Promise<void>
 
 export async function loginAction(formData: FormData): Promise<void> {
   const parsed = loginSchema.safeParse(formDataToRecord(formData));
-  if (!parsed.success) redirectWithError("/admin/login", parsed.error.issues[0]?.message ?? "Login inválido.");
+  if (!parsed.success) redirectWithError("/admin/login", "invalid-data");
 
   const emailKey = normalizeEmailKey(parsed.data.email);
   const requestHeaders = await headers();
@@ -99,7 +108,7 @@ export async function loginAction(formData: FormData): Promise<void> {
 
     redirectWithError(
       "/admin/login",
-      loginAllowed.reason === "locked-email" ? GENERIC_LOGIN_ERROR : THROTTLED_LOGIN_ERROR,
+      loginAllowed.reason === "locked-email" ? "invalid-credentials" : "throttled",
     );
   }
 
@@ -111,7 +120,7 @@ export async function loginAction(formData: FormData): Promise<void> {
     reason: outcome.ok ? null : outcome.reason,
   });
 
-  if (!outcome.ok) redirectWithError("/admin/login", GENERIC_LOGIN_ERROR);
+  if (!outcome.ok) redirectWithError("/admin/login", "invalid-credentials");
 
   redirect("/admin");
 }
@@ -125,7 +134,7 @@ export async function createAdminAction(formData: FormData): Promise<void> {
   const currentAdmin = await requireSuperAdmin();
   const requestHeaders = await requireValidAdminMutationRequest("/admin/users");
   const parsed = createAdminSchema.safeParse(formDataToRecord(formData));
-  if (!parsed.success) redirectWithError("/admin/users", parsed.error.issues[0]?.message ?? "Datos inválidos.");
+  if (!parsed.success) redirectWithError("/admin/users", "invalid-data");
 
   const input = parsed.data;
   let createdAdminId: string;
@@ -143,7 +152,7 @@ export async function createAdminAction(formData: FormData): Promise<void> {
     createdAdminId = createdAdmin.id;
   } catch (error: unknown) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      redirectWithError("/admin/users", "Ya existe un admin con ese email.");
+      redirectWithError("/admin/users", "admin-email-exists");
     }
     throw error;
   }
@@ -165,15 +174,15 @@ export async function toggleAdminActiveAction(formData: FormData): Promise<void>
   const currentAdmin = await requireSuperAdmin();
   const requestHeaders = await requireValidAdminMutationRequest("/admin/users");
   const parsed = toggleAdminSchema.safeParse(formDataToRecord(formData));
-  if (!parsed.success) redirectWithError("/admin/users", "Admin inválido.");
+  if (!parsed.success) redirectWithError("/admin/users", "invalid-admin");
 
   const { adminId } = parsed.data;
   if (adminId === currentAdmin.adminId) {
-    redirectWithError("/admin/users", "No podés desactivar tu propio usuario.");
+    redirectWithError("/admin/users", "self-disable");
   }
 
   const admin = await prisma.admin.findUnique({ where: { id: adminId }, select: { isActive: true } });
-  if (!admin) redirectWithError("/admin/users", "Admin no encontrado.");
+  if (!admin) redirectWithError("/admin/users", "admin-not-found");
 
   const nextActive = !admin.isActive;
   await prisma.admin.update({ where: { id: adminId }, data: { isActive: nextActive } });
@@ -199,18 +208,18 @@ type ConfirmOutcome =
   | { ok: true; reservation: Prisma.ReservationGetPayload<{ include: { user: true } }> }
   | { ok: false; failure: ConfirmFailure };
 
-const CONFIRM_ERROR_MESSAGES: Record<ConfirmFailure["kind"], string> = {
-  "not-found": "Reserva no encontrada.",
-  "invalid-state": "La reserva no puede confirmarse desde su estado actual.",
-  overlap: "Ya existe una reserva confirmada para ese turno.",
-  "concurrent-update": "No pudimos confirmar la reserva por una actualización concurrente. Intentá nuevamente.",
+const CONFIRM_ERROR_KEYS: Record<ConfirmFailure["kind"], string> = {
+  "not-found": "not-found",
+  "invalid-state": "invalid-state-confirm",
+  overlap: "overlap",
+  "concurrent-update": "concurrent-update",
 };
 
 export async function confirmReservationAction(formData: FormData): Promise<void> {
   const admin = await requireAdmin();
   const requestHeaders = await requireValidAdminMutationRequest("/admin");
   const reservationId = String(formData.get("reservationId") ?? "");
-  if (!reservationId) redirectWithError("/admin", "Reserva inválida.");
+  if (!reservationId) redirectWithError("/admin", "invalid-reservation");
 
   let outcome: ConfirmOutcome;
   try {
@@ -269,7 +278,7 @@ export async function confirmReservationAction(formData: FormData): Promise<void
   if (!outcome.ok) {
     redirectWithError(
       `/admin/reservations/${reservationId}`,
-      CONFIRM_ERROR_MESSAGES[outcome.failure.kind],
+      CONFIRM_ERROR_KEYS[outcome.failure.kind],
     );
   }
 
@@ -307,14 +316,14 @@ export async function rejectReservationAction(formData: FormData): Promise<void>
   const requestHeaders = await requireValidAdminMutationRequest("/admin");
   const reservationId = String(formData.get("reservationId") ?? "");
   const reason = String(formData.get("reason") ?? "").trim() || undefined;
-  if (!reservationId) redirectWithError("/admin", "Reserva inválida.");
+  if (!reservationId) redirectWithError("/admin", "invalid-reservation");
 
-  const reservation = await prisma.reservation.findUnique({ 
+  const reservation = await prisma.reservation.findUnique({
     where: { id: reservationId },
     include: { user: true },
   });
   if (!reservation || !canTransitionReservation(reservation.status, RESERVATION_STATUS.REJECTED)) {
-    redirectWithError(`/admin/reservations/${reservationId}`, "La reserva no puede rechazarse.");
+    redirectWithError(`/admin/reservations/${reservationId}`, "invalid-state-reject");
   }
 
   await prisma.reservation.update({
@@ -354,14 +363,14 @@ export async function cancelReservationAction(formData: FormData): Promise<void>
   const admin = await requireAdmin();
   const requestHeaders = await requireValidAdminMutationRequest("/admin");
   const reservationId = String(formData.get("reservationId") ?? "");
-  if (!reservationId) redirectWithError("/admin", "Reserva inválida.");
+  if (!reservationId) redirectWithError("/admin", "invalid-reservation");
 
   const reservation = await prisma.reservation.findUnique({
     where: { id: reservationId },
     include: { user: true },
   });
   if (!reservation || !canTransitionReservation(reservation.status, RESERVATION_STATUS.CANCELLED)) {
-    redirectWithError(`/admin/reservations/${reservationId}`, "La reserva no puede cancelarse desde su estado actual.");
+    redirectWithError(`/admin/reservations/${reservationId}`, "invalid-state-cancel");
   }
 
   await prisma.reservation.update({
