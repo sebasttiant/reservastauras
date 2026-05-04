@@ -2,6 +2,10 @@ node_modules
 .next
 coverage
 .env
+.env.local
+.env.development
+.env.production
+.env.test
 .env*.local
 !.env.example
 dist

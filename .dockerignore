@@ -3,6 +3,10 @@
 node_modules
 coverage
 .env
+.env.local
+.env.development
+.env.production
+.env.test
 .env*.local
 Dockerfile
 docker-compose.yml

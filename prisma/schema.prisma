@@ -28,6 +28,7 @@ model Admin {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   confirmed    Reservation[] @relation("ReservationConfirmedBy")
+  auditLogs    AuditLog[]
 }
 
 model User {
@@ -60,4 +61,44 @@ model Reservation {
 
   @@index([status, reservationDate, reservationTime])
   @@index([area])
+}
+
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  // Email normalizado (lowercase + trim). Tratado como string opaco: NO es FK
+  // al Admin para evitar filtrar si el email existe o no.
+  emailKey  String
+  // IP del cliente cuando se puede leer de un header confiable; null si no
+  // hay un origen claro. No inventamos valores.
+  ipKey     String?
+  success   Boolean
+  createdAt DateTime @default(now())
+  // Diagnóstico interno; nunca se expone al usuario.
+  // Valores: "no-such-admin" | "inactive" | "wrong-password" | "locked-email"
+  // | "locked-ip" | "rate-limited" | "validation"
+  reason    String?
+
+  @@index([emailKey, createdAt])
+  @@index([ipKey, createdAt])
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id           String     @id @default(cuid())
+  event        String
+  actorAdminId String?
+  actorEmail   String?
+  actorRole    AdminRole?
+  resourceType String?
+  resourceId   String?
+  outcome      String     @default("SUCCESS")
+  ipAddress    String?
+  userAgent    String?
+  metadata     Json?
+  createdAt    DateTime   @default(now())
+  actorAdmin   Admin?     @relation(fields: [actorAdminId], references: [id], onDelete: SetNull)
+
+  @@index([event, createdAt])
+  @@index([actorAdminId, createdAt])
+  @@index([resourceType, resourceId])
 }

@@ -29,9 +29,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <div className="hero-shell">
           <section className="hero-copy">
             <p className="brand-kicker">Tauras Steakhouse</p>
-            <h1>Reservá tu mesa con tranquilidad</h1>
+            <h1>Reserva tu mesa con tranquilidad</h1>
             <p>
-              Elegí fecha, hora y ambiente. Nuestro equipo revisa la agenda y te confirma la mesa para que solo te ocupes de disfrutar Tauras.
+              Elige la fecha, la hora y el ambiente. Nuestro equipo revisará la agenda y te confirmará la disponibilidad para que solo tengas que disfrutar Tauras.
             </p>
             <div className="hero-highlights" aria-label="Beneficios de reservar en Tauras">
               <span>Confirmación humana</span>
@@ -44,10 +44,10 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             <div className="section-heading">
               <p className="brand-kicker">Reservas</p>
               <h2>Datos de la reserva</h2>
-              <p className="muted">Completá la solicitud. Si necesitamos ajustar algo, te contactamos antes de confirmar.</p>
+              <p className="muted">Completa la solicitud. Si necesitamos ajustar algo, te contactaremos antes de confirmar.</p>
             </div>
 
-            {params.created ? <p className="notice">Recibimos tu solicitud. En breve un encargado se comunica con vos para confirmar disponibilidad.</p> : null}
+            {params.created ? <p className="notice">Recibimos tu solicitud. En breve, una persona del equipo se comunicará contigo para confirmar disponibilidad.</p> : null}
             {params.error ? <p className="notice error">{params.error}</p> : null}
 
             <form action={createReservationAction} className="grid">
@@ -57,14 +57,14 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                     <option value="Cualquier Mesa Disponible">Cualquier Mesa Disponible</option>
                     <option value="Terraza">Terraza</option>
                     <option value="Tauras Bar & Lounge">Tauras Bar & Lounge</option>
-                    <option value="Salón Sofa">Salón Sofa</option>
+                    <option value="Salón Sofá">Salón Sofá</option>
                   </select>
                 </label>
                 <label>Cantidad de personas<input name="partySize" type="number" min={1} max={30} defaultValue={1} required /></label>
                 <label>Fecha<input name="reservationDate" type="date" required /></label>
-                <label>Hora (11:00 – 22:00)
+                <label>Hora disponible
                   <select name="reservationTime" required defaultValue="">
-                    <option value="" disabled>Selecciona...</option>
+                    <option value="" disabled>Selecciona una hora</option>
                     {RESERVATION_TIMES.map((time) => <option key={time} value={time}>{time}</option>)}
                   </select>
                 </label>
@@ -77,7 +77,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                     <option value="Negocios">Negocios</option>
                   </select>
                 </label>
-                <label>Nombre<input name="name" required minLength={2} placeholder="Escribí tu nombre" /></label>
+                <label>Nombre<input name="name" required minLength={2} placeholder="Escribe tu nombre" /></label>
                 <label>Email<input name="email" type="email" required placeholder="correo@ejemplo.com" /></label>
                 <label>País
                   <select name="country" defaultValue="Colombia (+57)" required>

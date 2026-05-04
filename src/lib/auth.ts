@@ -2,7 +2,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { SignJWT, jwtVerify } from "jose";
-import { compare } from "bcryptjs";
+import { compare, hash } from "bcryptjs";
 import { ADMIN_ROLE, SESSION_COOKIE_NAME, type AdminRoleValue } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { getEnv } from "@/lib/env";
@@ -14,9 +14,20 @@ export interface AdminSession {
   name: string;
 }
 
+export type SignInOutcome =
+  | { ok: true; admin: AdminSession }
+  | { ok: false; reason: "no-such-admin" | "inactive" | "wrong-password" };
+
 function getSessionSecret(): Uint8Array {
   return new TextEncoder().encode(getEnv().SESSION_SECRET);
 }
+
+// Hash bcrypt válido contra el cual comparar cuando el admin no existe o está
+// inactivo. Igualar el tiempo de respuesta evita un side-channel para enumerar
+// emails. Se computa una vez por proceso, con el mismo cost (12) que se usa
+// para los hashes reales en createAdminAction. La promesa arranca al cargar
+// el módulo para que el primer login no pague el cómputo.
+const dummyHashPromise: Promise<string> = hash("not-a-real-password-just-padding", 12);
 
 export async function createAdminSession(admin: AdminSession): Promise<string> {
   return new SignJWT({ email: admin.email, role: admin.role, name: admin.name })
@@ -43,12 +54,23 @@ export async function verifyAdminSession(token: string): Promise<AdminSession | 
   }
 }
 
-export async function signInAdmin(email: string, password: string): Promise<boolean> {
+export async function signInAdmin(email: string, password: string): Promise<SignInOutcome> {
   const admin = await prisma.admin.findUnique({ where: { email } });
-  if (!admin || !admin.isActive) return false;
+
+  if (!admin) {
+    // Comparar contra el dummy mantiene el timing parejo respecto al camino
+    // "admin existe pero password mal", evitando enumeración por latencia.
+    await compare(password, await dummyHashPromise);
+    return { ok: false, reason: "no-such-admin" };
+  }
+
+  if (!admin.isActive) {
+    await compare(password, await dummyHashPromise);
+    return { ok: false, reason: "inactive" };
+  }
 
   const passwordMatches = await compare(password, admin.passwordHash);
-  if (!passwordMatches) return false;
+  if (!passwordMatches) return { ok: false, reason: "wrong-password" };
 
   const token = await createAdminSession({ adminId: admin.id, email: admin.email, role: admin.role, name: admin.name });
   const cookieStore = await cookies();
@@ -61,7 +83,10 @@ export async function signInAdmin(email: string, password: string): Promise<bool
     maxAge: 60 * 60 * 8,
   });
 
-  return true;
+  return {
+    ok: true,
+    admin: { adminId: admin.id, email: admin.email, role: admin.role, name: admin.name },
+  };
 }
 
 export async function signOutAdmin(): Promise<void> {
