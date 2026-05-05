@@ -56,7 +56,9 @@
   },
   "pnpm": {
     "overrides": {
-      "picomatch@4.0.3": "4.0.4"
+      "picomatch@4.0.3": "4.0.4",
+      "postcss": "8.5.14",
+      "@hono/node-server@1.19.11": "1.19.14"
     }
   }
 }

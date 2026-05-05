@@ -1,7 +1,9 @@
 FROM node:24.15.0-trixie-slim AS base
+ARG NPM_VERSION=11.13.0
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable
+RUN npm install -g "npm@${NPM_VERSION}" \
+ && corepack enable
 WORKDIR /app
 
 FROM base AS deps
