@@ -52,5 +52,10 @@
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
+  },
+  "pnpm": {
+    "overrides": {
+      "picomatch@4.0.3": "4.0.4"
+    }
   }
 }
