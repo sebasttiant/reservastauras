@@ -1,7 +1,9 @@
 FROM node:24.15.0-trixie-slim AS base
+ARG NPM_VERSION=11.13.0
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable
+RUN npm install -g "npm@${NPM_VERSION}" \
+ && corepack enable
 WORKDIR /app
 
 FROM base AS deps
@@ -36,4 +38,4 @@ USER nextjs
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD node -e "require('http').get('http://127.0.0.1:3000/', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"
-CMD ["sh", "-c", "pnpm db:migrate && pnpm db:seed && node server.js"]
+CMD ["sh", "-c", "pnpm db:migrate && node server.js"]
