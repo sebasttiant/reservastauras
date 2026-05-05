@@ -53,6 +53,11 @@ services:
       # ADMIN_PASSWORD sólo se usa en `pnpm db:seed`. Igual lo exigimos para que
       # el contenedor nunca arranque con una password trivial heredada.
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD is required (used by db:seed)}
+      # `true` SÓLO si hay TLS terminado delante (Caddy/Traefik/Nginx con cert,
+      # Cloudflare Tunnel, etc.). En `false` se omiten HSTS y
+      # `upgrade-insecure-requests` para que el deploy HTTP plano (LAN/IP)
+      # sirva los assets correctamente.
+      BEHIND_HTTPS: ${BEHIND_HTTPS:-false}
     depends_on:
       db:
         condition: service_healthy
