@@ -19,6 +19,7 @@
     "db:migrate": "prisma migrate deploy",
     "db:dev": "prisma migrate dev",
     "db:seed": "tsx --env-file-if-exists=.env prisma/seed.ts",
+    "db:clear-reservations": "tsx --env-file-if-exists=.env scripts/clear-reservations.ts",
     "scripts:check-env": "tsx scripts/check-env.ts",
     "scripts:purge-login-attempts": "tsx scripts/purge-login-attempts.ts"
   },
@@ -26,6 +27,7 @@
     "@prisma/adapter-pg": "7.8.0",
     "@prisma/client": "7.8.0",
     "bcryptjs": "3.0.3",
+    "exceljs": "^4.4.0",
     "jose": "6.2.3",
     "next": "16.2.4",
     "nodemailer": "8.0.7",
@@ -35,7 +37,6 @@
     "react": "19.2.5",
     "react-dom": "19.2.5",
     "server-only": "0.0.1",
-    "xlsx": "^0.18.5",
     "zod": "4.4.2"
   },
   "devDependencies": {

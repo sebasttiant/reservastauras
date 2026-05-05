@@ -73,10 +73,6 @@ jobs:
 
   audit:
     runs-on: ubuntu-latest
-    # xlsx tiene CVEs HIGH sin parche (SheetJS abandonó npm). El scan corre
-    # informativo hasta migrar a exceljs. Trivy con ignore-unfixed:true cubre
-    # el bloqueo real sobre CVEs con fix disponible.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup
@@ -98,6 +94,7 @@ jobs:
           format: sarif
           output: trivy-fs.sarif
           severity: HIGH,CRITICAL
+          trivyignores: .trivyignore
           ignore-unfixed: true
           exit-code: '1'
 
@@ -134,6 +131,7 @@ jobs:
           format: sarif
           output: trivy-image.sarif
           severity: HIGH,CRITICAL
+          trivyignores: .trivyignore
           ignore-unfixed: true
           exit-code: '1'
 

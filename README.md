@@ -62,7 +62,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-El servicio `web` espera el healthcheck de `db`. Las migraciones de producción se ejecutan explícitamente al arrancar el contenedor con `pnpm db:migrate` antes de iniciar Next. La seed se corre por separado contra el contenedor (ej: `docker compose exec web pnpm db:seed`).
+El servicio `web` espera el healthcheck de `db`. Las migraciones de producción se ejecutan explícitamente al arrancar el contenedor con `pnpm db:migrate` antes de iniciar Next. La seed NO corre automáticamente en el startup productivo; ejecutala manualmente solo cuando necesites crear el admin inicial (ej: `docker compose exec web pnpm db:seed`).
 
 ## Comandos útiles
 
@@ -74,6 +74,22 @@ pnpm db:generate
 pnpm db:migrate
 pnpm db:seed
 ```
+
+### Limpiar reservas de prueba
+
+Para dejar la agenda en blanco sin tocar admins, configuración ni migraciones:
+
+```bash
+CONFIRM_CLEAR_RESERVATIONS=true pnpm db:clear-reservations
+```
+
+El script usa el `DATABASE_URL` ya configurado en el entorno o en `.env`. En VPS, corré el comando desde la carpeta del proyecto asegurándote antes de que `DATABASE_URL` apunte a la base correcta. También podés confirmar con argumento explícito:
+
+```bash
+pnpm db:clear-reservations --confirm-clear-reservations
+```
+
+Sin una de esas confirmaciones, el comando falla y sólo imprime instrucciones.
 
 > Preferencia del proyecto: no ejecutar build final automáticamente durante implementación.
 

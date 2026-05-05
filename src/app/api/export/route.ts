@@ -5,7 +5,7 @@ import { requireSuperAdmin } from "@/lib/auth";
 import { AUDIT_EVENT, recordAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 import { getRequestSecurityContext } from "@/lib/security/request";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 
 function formatDate(value: Date): string {
@@ -102,10 +102,12 @@ export async function GET(request: Request) {
   }
 
   if (format === "xlsx") {
-    const worksheet = XLSX.utils.json_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Reservas");
-    const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Reservas");
+    worksheet.columns = Object.keys(data[0] ?? {}).map((key) => ({ header: key, key }));
+    worksheet.addRows(data);
+    const buffer = await workbook.xlsx.writeBuffer();
+
     return new NextResponse(buffer, {
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
