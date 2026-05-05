@@ -1,0 +1,42 @@
+# Trivy ignore list — TODAS las exclusiones necesitan justificación y plan.
+# Formato: una CVE por línea. Líneas que empiezan con `#` son comentarios.
+# Revisar trimestralmente: si algo dejó de aplicar, sacarlo de acá.
+
+# ─────────────────────────────────────────────────────────────────
+# xlsx (SheetJS) — package abandonado en npm
+# ─────────────────────────────────────────────────────────────────
+# SheetJS movió la distribución oficial a su CDN propio (cdn.sheetjs.com)
+# a partir de la 0.20.x. Las versiones "fixeadas" que reporta Trivy NO
+# están publicadas en el registry público de npm. `pnpm up xlsx@0.20.2`
+# falla porque esa versión no existe en npm.
+#
+# Plan de resolución: migrar a `exceljs` en una PR separada. Mientras tanto,
+# el riesgo real es bajo — sólo usamos xlsx para GENERAR archivos Excel a
+# partir de datos validados, NO para parsear input del usuario.
+#
+# TODO: revisar antes de 2026-Q3. Si exceljs migration no avanzó, considerar
+# Trivy y rerunning este allowlist.
+CVE-2023-30533
+CVE-2024-22363
+
+# ─────────────────────────────────────────────────────────────────
+# linux-libc-dev — kernel headers en la imagen base
+# ─────────────────────────────────────────────────────────────────
+# La imagen `node:24.15.0-trixie` incluye `linux-libc-dev`, que son los
+# archivos .h de la API del kernel Linux. Estas CVEs son del kernel mismo,
+# no de los headers — los headers solos NO son código ejecutable.
+#
+# Esta app es Node.js puro: no compila código de kernel, no llama syscalls
+# directos, no carga módulos del kernel. El paquete está presente sólo
+# porque viene preinstalado en la base.
+#
+# Plan de resolución: cambiar imagen base a `node:24.15.0-bookworm-slim` o
+# distroless en una PR separada. Las variantes -slim no incluyen
+# linux-libc-dev, y eso elimina TODAS estas CVEs de raíz sin necesidad de
+# allowlist.
+#
+# TODO: PR para migrar a bookworm-slim.
+CVE-2025-38627
+CVE-2025-40135
+CVE-2025-71152
+CVE-2025-71221
