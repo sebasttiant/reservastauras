@@ -1,0 +1,45 @@
+version: 2
+updates:
+  # npm packages — minor/patch agrupados, majors individuales para revisar a mano.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Argentina/Buenos_Aires
+    open-pull-requests-limit: 10
+    labels: [dependencies]
+    commit-message:
+      prefix: chore(deps)
+      include: scope
+    groups:
+      production-minor-patch:
+        dependency-type: production
+        update-types: [minor, patch]
+      development-minor-patch:
+        dependency-type: development
+        update-types: [minor, patch]
+
+  # GitHub Actions — agrupados.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels: [dependencies, ci]
+    commit-message:
+      prefix: chore(ci)
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Docker base image (node:24.15.0-trixie en el Dockerfile).
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels: [dependencies, docker]
+    commit-message:
+      prefix: chore(docker)

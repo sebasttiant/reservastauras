@@ -5,47 +5,141 @@ on:
   push:
     branches: [main]
 
+# Cancela corridas anteriores en el mismo ref para no quemar minutos cuando
+# se pushean varios commits seguidos. Crítico en repos privados.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Permisos por defecto: mínimos. Cada job que necesite más los pide explícito.
+permissions:
+  contents: read
+
+env:
+  # El job `test` levanta un servicio Postgres en localhost:5432.
+  # Para los demás jobs el valor es un placeholder — Prisma generate y Next
+  # build no abren conexión, sólo necesitan que la variable exista.
+  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test
+  SESSION_SECRET: ci-placeholder-session-secret-32-chars-minimum
+
 jobs:
-  validate:
+  lint:
     runs-on: ubuntu-latest
-    env:
-      # Placeholder para build. Prisma client no necesita conexión real.
-      DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder?schema=public
-      SESSION_SECRET: ci-placeholder-session-secret-32-chars-minimum
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - run: pnpm lint
 
-      - name: Setup Node
-        uses: actions/setup-node@v5
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - run: pnpm db:generate
+      - run: pnpm typecheck
+
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - run: pnpm db:generate
+      # Valida que las migraciones aplican limpias sobre una DB virgen.
+      # Si una migración rompe, esto explota antes de mergear.
+      - run: pnpm db:migrate
+      - run: pnpm test
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - run: pnpm db:generate
+      - run: pnpm build
+
+  audit:
+    runs-on: ubuntu-latest
+    # xlsx tiene CVEs HIGH sin parche (SheetJS abandonó npm). El scan corre
+    # informativo hasta migrar a exceljs. Trivy con ignore-unfixed:true cubre
+    # el bloqueo real sobre CVEs con fix disponible.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - run: pnpm audit --audit-level=high
+
+  trivy-fs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@master
         with:
-          node-version: 24.15.0
-          cache: pnpm
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-fs.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
 
-      - name: Enable Corepack
-        run: corepack enable
+      - name: Upload Trivy filesystem SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-fs.sarif
+          category: trivy-fs
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+  docker:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v5
 
-      - name: Generate Prisma client
-        run: pnpm db:generate
+      - uses: docker/setup-buildx-action@v3
 
-      - name: Typecheck
-        run: pnpm typecheck
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: reservastauras:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      - name: Test
-        run: pnpm test
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: reservastauras:ci
+          format: sarif
+          output: trivy-image.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
 
-      - name: Lint
-        run: pnpm lint
-
-      - name: Audit dependencies
-        run: |
-          # xlsx tiene CVEs high sin parche (SheetJS abandonó npm).
-          # Riesgo bajo: solo genera Excel, no parsea input usuario.
-          # TODO: migrar a exceljs cuando haya tiempo.
-          pnpm audit --audit-level=high || true
-
-      - name: Build
-        run: pnpm build
+      - name: Upload Trivy image SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-image.sarif
+          category: trivy-image
