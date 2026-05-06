@@ -4,6 +4,7 @@ import { cancelReservationAction, confirmReservationAction, rejectReservationAct
 import { RESERVATION_STATUS } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { canTransitionReservation } from "@/lib/reservations/state";
+import { buildReservationSlotAwarenessNotice } from "@/lib/reservations/slot-awareness";
 import { requireAdmin } from "@/lib/auth";
 import { RESERVATION_DETAIL_ERROR_MESSAGES, lookupMessage } from "@/lib/messages";
 
@@ -38,6 +39,26 @@ export default async function ReservationDetailPage({ params, searchParams }: Re
 
   if (!reservation) notFound();
 
+  const sameSlotSummary = await prisma.reservation.groupBy({
+    by: ["status"],
+    where: {
+      id: { not: reservation.id },
+      reservationDate: reservation.reservationDate,
+      reservationTime: reservation.reservationTime,
+      area: reservation.area,
+      status: { in: [RESERVATION_STATUS.CONFIRMED, RESERVATION_STATUS.PENDING] },
+    },
+    _count: { id: true },
+    _sum: { partySize: true },
+  });
+  const sameSlotCounts = new Map(sameSlotSummary.map((item) => [item.status, item]));
+  const slotAwarenessNotice = buildReservationSlotAwarenessNotice({
+    confirmedReservations: sameSlotCounts.get(RESERVATION_STATUS.CONFIRMED)?._count.id ?? 0,
+    confirmedPeople: sameSlotCounts.get(RESERVATION_STATUS.CONFIRMED)?._sum.partySize ?? 0,
+    pendingReservations: sameSlotCounts.get(RESERVATION_STATUS.PENDING)?._count.id ?? 0,
+    pendingPeople: sameSlotCounts.get(RESERVATION_STATUS.PENDING)?._sum.partySize ?? 0,
+  });
+
   const successMessage = query.ok ? SUCCESS_MESSAGES[query.ok] : undefined;
   const errorMessage = lookupMessage(RESERVATION_DETAIL_ERROR_MESSAGES, query.error);
   const canConfirm = canTransitionReservation(reservation.status, RESERVATION_STATUS.CONFIRMED)
@@ -64,6 +85,12 @@ export default async function ReservationDetailPage({ params, searchParams }: Re
         {successMessage ? <p className="notice">{successMessage}</p> : null}
         {errorMessage ? <p className="notice error">{errorMessage}</p> : null}
         {reservation.emailError ? <p className="notice error">Confirmada, pero falló el email: {reservation.emailError}</p> : null}
+
+        <aside className={`notice ${slotAwarenessNotice.tone === "warning" ? "warning" : "muted-notice"}`} aria-label="Alerta operativa de disponibilidad">
+          <strong>{slotAwarenessNotice.title}</strong>
+          <p>{slotAwarenessNotice.summary}</p>
+          <p>{slotAwarenessNotice.advisory}</p>
+        </aside>
 
         <dl className="grid two">
           <div><dt>Estado</dt><dd>{STATUS_LABELS[reservation.status]}</dd></div>

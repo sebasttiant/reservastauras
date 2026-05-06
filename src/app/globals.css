@@ -249,6 +249,12 @@ button:hover, .button:hover { background: var(--brand-strong); color: #080604; t
   border: 1px solid rgba(70, 190, 105, .5);
 }
 
+.notice p { margin: 6px 0 0; }
+
+.notice.warning { background: rgba(236, 154, 41, .2); border-color: rgba(236, 154, 41, .62); }
+
+.notice.muted-notice { background: rgba(210, 197, 169, .1); border-color: rgba(210, 197, 169, .36); color: var(--muted); }
+
 .error { background: rgba(184, 50, 42, .22); border-color: rgba(255, 120, 100, .55); }
 
 .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
