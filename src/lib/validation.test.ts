@@ -70,6 +70,19 @@ describe("reservationRequestSchema (con reloj fijado a Bogotá borde-de-día)", 
     }
   });
 
+  it("normaliza teléfono con prefijo, espacios y separadores antes de guardar", () => {
+    const result = reservationRequestSchema.safeParse({
+      ...baseInput,
+      phone: "+57 (300) 123-4567",
+      reservationDate: FAR_FUTURE,
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.phone).toBe("573001234567");
+    }
+  });
+
   it("rechaza formato inválido de fecha y hora", () => {
     const result = reservationRequestSchema.safeParse({
       ...baseInput,
@@ -88,8 +101,10 @@ describe("reservationRequestSchema (con reloj fijado a Bogotá borde-de-día)", 
 
   it("exige teléfono válido y consentimientos", () => {
     const invalidPhone = reservationRequestSchema.safeParse({ ...baseInput, reservationDate: FAR_FUTURE, phone: "abc" });
+    const tooLongPhone = reservationRequestSchema.safeParse({ ...baseInput, reservationDate: FAR_FUTURE, phone: "+57 300 123 4567 9999" });
     const missingConsent = reservationRequestSchema.safeParse({ ...baseInput, reservationDate: FAR_FUTURE, dataConsent: undefined });
     expect(invalidPhone.success).toBe(false);
+    expect(tooLongPhone.success).toBe(false);
     expect(missingConsent.success).toBe(false);
   });
 });

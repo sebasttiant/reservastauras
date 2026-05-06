@@ -144,10 +144,13 @@ h2 { color: var(--brand); font-size: clamp(1.45rem, 4vw, 2rem); line-height: 1.0
 .two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
-label { display: grid; gap: 7px; font-weight: 900; color: var(--fg); }
+label { display: grid; gap: 7px; min-width: 0; font-weight: 900; color: var(--fg); }
 
 input, textarea, select {
+  display: block;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   border: 1px solid rgba(255, 255, 255, .18);
   border-radius: 12px;
   padding: 13px 14px;
@@ -182,7 +185,19 @@ input[type="checkbox"] {
    porque es el único clickable. Un background-image SVG sólo decora y
    confunde: queda un ícono extra al lado del nativo. */
 input[type="date"] {
+  appearance: none;
+  -webkit-appearance: none;
   cursor: pointer;
+  text-align: left;
+}
+
+input[type="date"]::-webkit-date-and-time-value {
+  min-height: 1.5em;
+  text-align: left;
+}
+
+input[type="date"]::-webkit-datetime-edit {
+  padding: 0;
 }
 
 input[type="date"]::-webkit-calendar-picker-indicator {

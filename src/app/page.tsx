@@ -86,7 +86,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                     {COUNTRIES.map((country) => <option key={country} value={country}>{country}</option>)}
                   </select>
                 </label>
-                <label>Teléfono<input name="phone" inputMode="tel" pattern="[0-9]{7,15}" required placeholder="3001234567" /></label>
+                <label>Teléfono<input name="phone" inputMode="tel" pattern="[0-9+()\s-]{7,25}" required placeholder="3001234567" title="Ingresá un teléfono válido. Podés usar espacios, +, guiones o paréntesis." /></label>
               </div>
               <label>Especificaciones
                 <textarea name="notes" rows={4} maxLength={500} placeholder="Intolerancias, celebración, ubicación preferida o comentario extra…" />

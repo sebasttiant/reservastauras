@@ -35,10 +35,18 @@ const checkboxSchema = z.literal("on", {
   error: "Debés aceptar este punto para continuar.",
 });
 
+const phoneSchema = z
+  .string()
+  .trim()
+  .transform((value) => value.replace(/\D/g, ""))
+  .refine((value) => /^\d{7,15}$/.test(value), {
+    error: "Ingresá un teléfono válido de 7 a 15 dígitos.",
+  });
+
 export const reservationRequestSchema = z.object({
   name: z.string().trim().min(2, { error: "Ingresá tu nombre." }).max(120),
   email: z.email({ error: "Ingresá un email válido." }).transform((value) => value.toLowerCase()),
-  phone: z.string().trim().regex(/^\d{7,15}$/, { error: "Ingresá un teléfono válido de 7 a 15 dígitos." }),
+  phone: phoneSchema,
   country: z.string().trim().min(2, { error: "Seleccioná tu país." }).max(80),
   reservationDate: dateOnlySchema,
   reservationTime: timeSchema,
