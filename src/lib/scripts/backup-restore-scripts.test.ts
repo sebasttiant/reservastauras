@@ -227,6 +227,16 @@ describe("backup and restore shell scripts", () => {
     expect(restoreContent).not.toContain(".restore-passphrase");
   });
 
+  it("usa /root/secrets/tauras-backup-passphrase como passphrase file estándar cuando existe", () => {
+    const backupContent = read(backupScript);
+    const restoreContent = read(restoreScript);
+
+    expect(backupContent).toContain("DEFAULT_PASSPHRASE_FILE=\"/root/secrets/tauras-backup-passphrase\"");
+    expect(restoreContent).toContain("DEFAULT_PASSPHRASE_FILE=\"/root/secrets/tauras-backup-passphrase\"");
+    expect(backupContent).toContain("BACKUP_PASSPHRASE_FILE=\"$DEFAULT_PASSPHRASE_FILE\"");
+    expect(restoreContent).toContain("BACKUP_PASSPHRASE_FILE=\"$DEFAULT_PASSPHRASE_FILE\"");
+  });
+
   it("falla si no puede proteger .env salvo opt-in plaintext explícito y metadata-marcado", () => {
     const projectRoot = makeTempProject();
     installFakeDocker(projectRoot);
@@ -356,6 +366,7 @@ describe("backup and restore shell scripts", () => {
     const content = read(backupReadme);
 
     expect(content).toContain("BACKUP_PASSPHRASE_FILE");
+    expect(content).toContain("/root/secrets/tauras-backup-passphrase");
     expect(content).toContain("GPG simétrico");
     expect(content).toContain("ALLOW_PLAINTEXT_ENV_BACKUP=true");
     expect(content).toContain("dry-run");

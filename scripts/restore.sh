@@ -8,6 +8,7 @@ COMPOSE_FILE="${COMPOSE_FILE:-$PROJECT_ROOT/docker-compose.yml}"
 DB_SERVICE="${DB_SERVICE:-db}"
 WEB_SERVICE="${WEB_SERVICE:-web}"
 ENV_FILE="$PROJECT_ROOT/.env"
+DEFAULT_PASSPHRASE_FILE="/root/secrets/tauras-backup-passphrase"
 WORK_DIR="$(mktemp -d)"
 RESTORE_DB=0
 WEB_STOPPED=0
@@ -148,6 +149,10 @@ metadata_value() {
 }
 
 set_gpg_passphrase() {
+  if [[ -z "${BACKUP_PASSPHRASE_FILE:-}" && -f "$DEFAULT_PASSPHRASE_FILE" ]]; then
+    BACKUP_PASSPHRASE_FILE="$DEFAULT_PASSPHRASE_FILE"
+  fi
+
   if [[ -n "${BACKUP_PASSPHRASE_FILE:-}" ]]; then
     [[ -f "$BACKUP_PASSPHRASE_FILE" ]] || fail "BACKUP_PASSPHRASE_FILE does not exist: $BACKUP_PASSPHRASE_FILE"
     GPG_PASSPHRASE_MODE="file"

@@ -8,6 +8,7 @@ COMPOSE_FILE="${COMPOSE_FILE:-$PROJECT_ROOT/docker-compose.yml}"
 DB_SERVICE="${DB_SERVICE:-db}"
 BACKUP_DIR="${BACKUP_DIR:-$PROJECT_ROOT/backups}"
 BACKUP_RETENTION=7
+DEFAULT_PASSPHRASE_FILE="/root/secrets/tauras-backup-passphrase"
 TIMESTAMP="$(date -u +%Y%m%d-%H%M%S)"
 BUNDLE_NAME="tauras-backup-${TIMESTAMP}.tar.gz"
 WORK_DIR="$(mktemp -d)"
@@ -39,6 +40,7 @@ Environment:
   BACKUP_DIR                 Destination directory. Defaults to PROJECT_ROOT/backups.
   BACKUP_PASSPHRASE          Passphrase for GPG symmetric .env encryption.
   BACKUP_PASSPHRASE_FILE     File containing passphrase for GPG symmetric encryption.
+                            Defaults to /root/secrets/tauras-backup-passphrase when present.
   ALLOW_PLAINTEXT_ENV_BACKUP Explicit insecure opt-in. Set true only for local drills.
   COMPOSE_FILE               Compose file path. Defaults to PROJECT_ROOT/docker-compose.yml.
   DB_SERVICE                 PostgreSQL compose service. Defaults to db.
@@ -148,6 +150,10 @@ validate_dump_file() {
 }
 
 set_gpg_passphrase() {
+  if [[ -z "${BACKUP_PASSPHRASE_FILE:-}" && -f "$DEFAULT_PASSPHRASE_FILE" ]]; then
+    BACKUP_PASSPHRASE_FILE="$DEFAULT_PASSPHRASE_FILE"
+  fi
+
   if [[ -n "${BACKUP_PASSPHRASE_FILE:-}" ]]; then
     [[ -f "$BACKUP_PASSPHRASE_FILE" ]] || fail "BACKUP_PASSPHRASE_FILE does not exist: $BACKUP_PASSPHRASE_FILE"
     GPG_PASSPHRASE_MODE="file"
