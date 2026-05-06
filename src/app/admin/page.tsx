@@ -57,7 +57,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         <div className="admin-title">
           <p className="brand-kicker">Tauras Admin</p>
           <h1>Reservas</h1>
-          <p className="muted">Gestioná solicitudes con confirmación humana, trazabilidad y control anti-solapamiento.</p>
+          <p className="muted">Gestioná reservas con criterio humano y trazabilidad.</p>
         </div>
         <div className="actions">
           {admin.role === ADMIN_ROLE.SUPER_ADMIN ? (
