@@ -1,4 +1,5 @@
 import { createReservationAction } from "@/app/actions";
+import { ReservationSuccessReset } from "@/app/reservation-success-reset";
 import { PUBLIC_ERROR_MESSAGES, lookupMessage } from "@/lib/messages";
 
 const RESERVATION_TIMES = [
@@ -49,7 +50,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               <p className="muted">Completa la solicitud. Si necesitamos ajustar algo, te contactaremos antes de confirmar.</p>
             </div>
 
-            {params.created ? <p className="notice">Recibimos tu solicitud. En breve, una persona del equipo se comunicará contigo para confirmar disponibilidad.</p> : null}
+            {params.created ? (
+              <>
+                <ReservationSuccessReset />
+                <p className="notice">Recibimos tu solicitud. En breve, una persona del equipo se comunicará contigo para confirmar disponibilidad.</p>
+              </>
+            ) : null}
             {errorMessage ? <p className="notice error">{errorMessage}</p> : null}
 
             <form action={createReservationAction} className="grid">
