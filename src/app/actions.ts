@@ -201,7 +201,6 @@ export async function toggleAdminActiveAction(formData: FormData): Promise<void>
 type ConfirmFailure =
   | { kind: "not-found" }
   | { kind: "invalid-state" }
-  | { kind: "overlap" }
   | { kind: "concurrent-update" };
 
 type ConfirmOutcome =
@@ -211,7 +210,6 @@ type ConfirmOutcome =
 const CONFIRM_ERROR_KEYS: Record<ConfirmFailure["kind"], string> = {
   "not-found": "not-found",
   "invalid-state": "invalid-state-confirm",
-  overlap: "overlap",
   "concurrent-update": "concurrent-update",
 };
 
@@ -231,18 +229,6 @@ export async function confirmReservationAction(formData: FormData): Promise<void
           return { ok: false, failure: { kind: "invalid-state" } };
         }
 
-        const overlapping = await tx.reservation.findFirst({
-          where: {
-            id: { not: reservation.id },
-            status: RESERVATION_STATUS.CONFIRMED,
-            reservationDate: reservation.reservationDate,
-            reservationTime: reservation.reservationTime,
-            area: reservation.area,
-          },
-          select: { id: true },
-        });
-        if (overlapping) return { ok: false, failure: { kind: "overlap" } };
-
         const updated = await tx.reservation.update({
           where: { id: reservation.id },
           data: {
@@ -259,13 +245,10 @@ export async function confirmReservationAction(formData: FormData): Promise<void
     );
   } catch (error: unknown) {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      // P2002: el unique parcial de Postgres atrapa el solapamiento si dos
-      // admins confirman a la vez. P2034: la transacción serializable abortó
-      // por write-conflict o deadlock. En ambos casos volvemos al detalle
-      // con un mensaje accionable, sin reintento automático.
-      if (error.code === "P2002") {
-        outcome = { ok: false, failure: { kind: "overlap" } };
-      } else if (error.code === "P2034") {
+      // P2034: la transacción serializable abortó por write-conflict o
+      // deadlock. Volvemos al detalle con un mensaje accionable, sin reintento
+      // automático.
+      if (error.code === "P2034") {
         outcome = { ok: false, failure: { kind: "concurrent-update" } };
       } else {
         throw error;

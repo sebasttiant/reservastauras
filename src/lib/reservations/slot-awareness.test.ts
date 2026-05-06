@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildReservationSlotAwarenessNotice } from "@/lib/reservations/slot-awareness";
 
 describe("buildReservationSlotAwarenessNotice", () => {
-  it("summarizes confirmed and pending reservations for the same slot", () => {
+  it("summarizes confirmed and pending reservations for the same time", () => {
     const notice = buildReservationSlotAwarenessNotice({
       confirmedReservations: 2,
       confirmedPeople: 7,
@@ -16,7 +16,7 @@ describe("buildReservationSlotAwarenessNotice", () => {
     expect(notice.advisory).toBe("No bloquea la confirmación; es una alerta para revisar disponibilidad real de mesas en sitio.");
   });
 
-  it("returns a reassuring notice when the slot has no other active requests", () => {
+  it("returns a reassuring notice when the time has no other active requests", () => {
     const notice = buildReservationSlotAwarenessNotice({
       confirmedReservations: 0,
       confirmedPeople: 0,
@@ -25,7 +25,7 @@ describe("buildReservationSlotAwarenessNotice", () => {
     });
 
     expect(notice.tone).toBe("reassuring");
-    expect(notice.title).toBe("Slot sin otras solicitudes activas");
+    expect(notice.title).toBe("No hay reservas cruzadas en este horario");
     expect(notice.summary).toBe("No hay otras reservas confirmadas ni solicitudes pendientes para esa misma zona, fecha y horario.");
     expect(notice.advisory).toBe("No bloquea la confirmación; es una alerta operativa para revisar disponibilidad real de mesas en sitio.");
   });

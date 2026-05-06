@@ -48,7 +48,6 @@ export const RESERVATION_DETAIL_ERROR_MESSAGES = {
   "invalid-state-confirm": "La reserva no puede confirmarse desde su estado actual.",
   "invalid-state-reject": "La reserva no puede rechazarse.",
   "invalid-state-cancel": "La reserva no puede cancelarse desde su estado actual.",
-  "overlap": "Ya existe una reserva confirmada para ese turno.",
   "concurrent-update": "No pudimos confirmar la reserva por una actualización concurrente. Intentá nuevamente.",
 } as const;
 

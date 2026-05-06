@@ -40,7 +40,7 @@ export function buildReservationSlotAwarenessNotice(
     return {
       ...counts,
       tone: RESERVATION_SLOT_AWARENESS_TONE.REASSURING,
-      title: "Slot sin otras solicitudes activas",
+      title: "No hay reservas cruzadas en este horario",
       summary: "No hay otras reservas confirmadas ni solicitudes pendientes para esa misma zona, fecha y horario.",
       advisory: "No bloquea la confirmación; es una alerta operativa para revisar disponibilidad real de mesas en sitio.",
     };
@@ -51,7 +51,7 @@ export function buildReservationSlotAwarenessNotice(
     : "No hay reservas confirmadas en esta misma zona, fecha y horario.";
   const pendingSummary = counts.pendingReservations > 0
     ? `También hay ${counts.pendingReservations} ${requestLabel(counts.pendingReservations)} pendiente${counts.pendingReservations === 1 ? "" : "s"} (${counts.pendingPeople} ${peopleLabel(counts.pendingPeople)}) para revisar.`
-    : "No hay solicitudes pendientes adicionales para este slot.";
+    : "No hay solicitudes pendientes adicionales para este horario.";
 
   return {
     ...counts,
