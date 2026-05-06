@@ -41,6 +41,15 @@ BACKUP_PASSPHRASE_FILE=/ruta/segura/backup-passphrase ./scripts/backup.sh
 
 Para cron, preferí `BACKUP_PASSPHRASE_FILE` con permisos `600`, fuera del repo si podés.
 
+En el VPS, si existe este archivo estándar, los scripts lo usan automáticamente y no necesitás exportar variables en cada ejecución:
+
+```bash
+mkdir -p /root/secrets
+openssl rand -base64 48 > /root/secrets/tauras-backup-passphrase
+chmod 600 /root/secrets/tauras-backup-passphrase
+./scripts/backup.sh
+```
+
 Existe un bypass inseguro SOLO para drills locales muy controlados:
 
 ```bash
@@ -54,7 +63,7 @@ Eso mete `.env.snapshot` en plaintext dentro del bundle y `metadata.json` lo mar
 Ejemplo para correr todos los días a las 02:00:
 
 ```cron
-0 2 * * * cd /ruta/al/proyecto/reservastauras-next && /usr/bin/env BACKUP_DIR=/ruta/al/proyecto/reservastauras-next/backups BACKUP_PASSPHRASE_FILE=/ruta/segura/backup-passphrase ./scripts/backup.sh >> /ruta/al/proyecto/reservastauras-next/backups/backup.log 2>&1
+0 2 * * * cd /ruta/al/proyecto/reservastauras-next && ./scripts/backup.sh >> /ruta/al/proyecto/reservastauras-next/backups/backup.log 2>&1
 ```
 
 Ojo con redirecciones eternas: si mandás salida a `backup.log`, configurá `logrotate` o una rotación equivalente para que el log no crezca sin límite.
@@ -70,7 +79,7 @@ Después de crear un bundle exitoso, el script mantiene solo los últimos 7 back
 Para verificar un bundle en dry-run:
 
 ```bash
-BACKUP_PASSPHRASE_FILE=/ruta/segura/backup-passphrase ./scripts/restore.sh backups/tauras-backup-YYYYMMDD-HHMMSS.tar.gz
+./scripts/restore.sh backups/tauras-backup-YYYYMMDD-HHMMSS.tar.gz
 ```
 
 Por defecto `restore.sh` NO modifica la base ni escribe `.env.restored.*`. El flujo de verificación hace esto:
@@ -84,13 +93,13 @@ Por defecto `restore.sh` NO modifica la base ni escribe `.env.restored.*`. El fl
 Para aplicar un restore destructivo, tenés que pedirlo explícitamente con `--restore-db` y confirmar la frase exacta `RESTORE <POSTGRES_DB>`:
 
 ```bash
-BACKUP_PASSPHRASE_FILE=/ruta/segura/backup-passphrase ./scripts/restore.sh backups/tauras-backup-YYYYMMDD-HHMMSS.tar.gz --restore-db
+./scripts/restore.sh backups/tauras-backup-YYYYMMDD-HHMMSS.tar.gz --restore-db
 ```
 
 Para automatización controlada, podés usar una confirmación explícita:
 
 ```bash
-BACKUP_PASSPHRASE_FILE=/ruta/segura/backup-passphrase RESTORE_CONFIRM="RESTORE reservastauras" ./scripts/restore.sh backups/tauras-backup-YYYYMMDD-HHMMSS.tar.gz --restore-db
+RESTORE_CONFIRM="RESTORE reservastauras" ./scripts/restore.sh backups/tauras-backup-YYYYMMDD-HHMMSS.tar.gz --restore-db
 ```
 
 Durante el restore destructivo, el script detiene `web`, crea un safety dump en `backups/pre-restore/`, corre `pg_restore --clean --if-exists --single-transaction --no-owner --no-privileges` y vuelve a levantar `web`.
