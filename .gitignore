@@ -11,3 +11,6 @@ coverage
 dist
 *.log
 tsconfig.tsbuildinfo
+.atl
+backups/
+.env.restored.*
