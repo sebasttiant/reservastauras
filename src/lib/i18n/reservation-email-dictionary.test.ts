@@ -65,7 +65,7 @@ describe("RESERVATION_EMAIL_COPY", () => {
   it("preserves the legacy Spanish strings byte-identically (back-compat contract)", () => {
     const es: ReservationEmailCopy = RESERVATION_EMAIL_COPY.es;
 
-    // Subjects (back-compat: estos eran los strings hardcoded antes de PR3)
+    // Subjects (back-compat: estos eran los strings hardcoded antes de esta mejora)
     expect(es.confirmation.subject).toBe("Tu reserva en TAURAS ha sido confirmada");
     expect(es.rejection.subject).toBe("Tu solicitud de reserva en TAURAS");
     expect(es.cancellation.subject).toBe("Tu reserva en TAURAS ha sido cancelada");

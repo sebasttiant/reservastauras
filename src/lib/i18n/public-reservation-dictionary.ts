@@ -214,7 +214,7 @@ export function getPublicReservationCopy(language: unknown): PublicReservationCo
 
 export function buildPublicLanguageHref(language: unknown): string {
   const publicLanguage = parsePublicLanguage(language);
-  return `/?lang=${publicLanguage}`;
+  return publicLanguage === DEFAULT_PUBLIC_LANGUAGE ? "/" : `/?lang=${publicLanguage}`;
 }
 
 export function isSupportedPublicLanguage(value: unknown): value is PublicLanguage {

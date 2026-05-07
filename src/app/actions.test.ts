@@ -169,7 +169,7 @@ describe("confirmReservationAction", () => {
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/admin/reservations/reservation-1");
   });
 
-  // PR3: el idioma del email del cliente sale de la columna `customerLanguage`
+  // El idioma del email del cliente sale de la columna `customerLanguage`
   // de la reserva, normalizado defensivamente con `parsePublicLanguage` por si
   // un valor legacy/corrupto entró por backfill o por una fila vieja.
   function buildConfirmFixtures(customerLanguage: string) {
@@ -251,7 +251,7 @@ describe("confirmReservationAction", () => {
   });
 });
 
-describe("rejectReservationAction (PR3: bilingual email wiring)", () => {
+describe("rejectReservationAction (bilingual email wiring)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.headers.mockResolvedValue(new Headers({ origin: "https://tauras.test" }));
@@ -309,7 +309,7 @@ describe("rejectReservationAction (PR3: bilingual email wiring)", () => {
   });
 });
 
-describe("cancelReservationAction (PR3: bilingual email wiring)", () => {
+describe("cancelReservationAction (bilingual email wiring)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.headers.mockResolvedValue(new Headers({ origin: "https://tauras.test" }));
@@ -362,7 +362,7 @@ describe("cancelReservationAction (PR3: bilingual email wiring)", () => {
   });
 });
 
-describe("createReservationAction (PR1: persistencia bilingüe + redirects saneados)", () => {
+describe("createReservationAction (persistencia bilingüe + redirects saneados)", () => {
   // Reloj congelado para que las fechas futuras del schema validen
   // independientemente del runner. Bogotá es UTC-5, así que un input fechado
   // como "2026-12-31" siempre va a ser "futuro" respecto a este instante.
@@ -429,7 +429,7 @@ describe("createReservationAction (PR1: persistencia bilingüe + redirects sanea
   });
 
   it("acepta el formulario actual sin customerLanguage y persiste 'es' por default", async () => {
-    // Caso de compatibilidad: PR1 se deploya antes que la UI bilingüe (PR2).
+    // Caso de compatibilidad: la persistencia se deploya antes que la UI bilingüe.
     // El formulario actual NO envía `customerLanguage`; ese request debe seguir
     // funcionando y guardarse como español.
     const formData = buildFormData();

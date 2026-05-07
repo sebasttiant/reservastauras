@@ -7,6 +7,12 @@ import {
 } from "@/lib/messages";
 
 describe("public messages", () => {
+  it("keeps Spanish and English public error message keys in parity", () => {
+    expect(Object.keys(PUBLIC_ERROR_MESSAGES.en).sort()).toEqual(
+      Object.keys(PUBLIC_ERROR_MESSAGES.es).sort(),
+    );
+  });
+
   it("resolves public opaque error keys by language", () => {
     expect(lookupPublicMessage(PUBLIC_ERROR_MESSAGES, "invalid-data", "es")).toBe(
       "Datos inválidos. Revisá el formulario.",

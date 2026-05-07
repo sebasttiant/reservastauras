@@ -108,7 +108,7 @@ describe("reservationRequestSchema (con reloj fijado a Bogotá borde-de-día)", 
     expect(missingConsent.success).toBe(false);
   });
 
-  // PR1 deploy-safety: el formulario público actual NO envía `customerLanguage`,
+  // Deploy-safety: el formulario público anterior NO enviaba `customerLanguage`,
   // y el rollout no debe romper esos requests; pero un valor explícito inválido
   // debe ser rechazado para no persistir basura.
   it("acepta el campo customerLanguage ausente y lo defaultea a 'es'", () => {
