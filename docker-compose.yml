@@ -58,6 +58,9 @@ services:
       # `upgrade-insecure-requests` para que el deploy HTTP plano (LAN/IP)
       # sirva los assets correctamente.
       BEHIND_HTTPS: ${BEHIND_HTTPS:-false}
+      # Bind Next.js to all container interfaces so Docker's localhost
+      # healthcheck can reach the standalone server reliably.
+      HOSTNAME: "0.0.0.0"
     depends_on:
       db:
         condition: service_healthy
