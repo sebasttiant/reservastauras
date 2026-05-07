@@ -1,6 +1,12 @@
 import { createReservationAction } from "@/app/actions";
 import { ReservationSuccessReset } from "@/app/reservation-success-reset";
-import { PUBLIC_ERROR_MESSAGES, lookupMessage } from "@/lib/messages";
+import {
+  buildPublicLanguageHref,
+  getPublicReservationCopy,
+  shouldRenderLanguageParam,
+} from "@/lib/i18n/public-reservation-dictionary";
+import { parsePublicLanguage } from "@/lib/i18n/language";
+import { PUBLIC_ERROR_MESSAGES, lookupPublicMessage } from "@/lib/messages";
 
 const RESERVATION_TIMES = [
   "11:00", "11:30", "12:00", "12:30", "13:00", "13:30", "14:00", "14:30",
@@ -9,100 +15,91 @@ const RESERVATION_TIMES = [
   "00:00", "01:00",
 ] as const;
 
-const COUNTRIES = [
-  "Colombia (+57)", "Estados Unidos (+1)", "Canadá (+1)", "México (+52)",
-  "Guatemala (+502)", "El Salvador (+503)", "Honduras (+504)", "Nicaragua (+505)",
-  "Costa Rica (+506)", "Panamá (+507)", "Brasil (+55)", "Argentina (+54)",
-  "Uruguay (+598)", "Paraguay (+595)", "Bolivia (+591)", "Chile (+56)",
-  "Perú (+51)", "Venezuela (+58)", "España (+34)", "Francia (+33)",
-  "Reino Unido (+44)", "Alemania (+49)", "Italia (+39)", "Portugal (+351)",
-] as const;
-
 interface HomePageProps {
   searchParams: Promise<Record<string, string | undefined>>;
 }
 
 export default async function HomePage({ searchParams }: HomePageProps) {
   const params = await searchParams;
-  const errorMessage = lookupMessage(PUBLIC_ERROR_MESSAGES, params.error);
+  const publicLanguage = parsePublicLanguage(params.lang);
+  const copy = getPublicReservationCopy(publicLanguage);
+  const errorMessage = lookupPublicMessage(PUBLIC_ERROR_MESSAGES, params.error, publicLanguage);
 
   return (
     <>
       <main className="hero">
         <div className="hero-shell">
           <section className="hero-copy">
-            <p className="brand-kicker">Tauras Steakhouse</p>
-            <h1>Reserva tu mesa con tranquilidad</h1>
+            <p className="brand-kicker">{copy.brandKicker}</p>
+            <h1>{copy.hero.title}</h1>
             <p>
-              Elige la fecha, la hora y el ambiente. Nuestro equipo revisará la agenda y te confirmará la disponibilidad para que solo tengas que disfrutar Tauras.
+              {copy.hero.description}
             </p>
-            <div className="hero-highlights" aria-label="Beneficios de reservar en Tauras">
-              <span>Confirmación humana</span>
-              <span>Ambientes Tauras</span>
-              <span>Atención personalizada</span>
+            <div className="hero-highlights" aria-label={copy.hero.highlightsAriaLabel}>
+              {copy.hero.highlights.map((highlight) => <span key={highlight}>{highlight}</span>)}
             </div>
           </section>
 
-          <section className="card reservation-card grid" aria-label="Formulario de reserva Tauras Steakhouse">
+          <section className="card reservation-card grid" aria-label={copy.section.ariaLabel}>
             <div className="section-heading">
-              <p className="brand-kicker">Reservas</p>
-              <h2>Datos de la reserva</h2>
-              <p className="muted">Completa la solicitud. Si necesitamos ajustar algo, te contactaremos antes de confirmar.</p>
+              <p className="brand-kicker">{copy.section.kicker}</p>
+              <h2>{copy.section.title}</h2>
+              <p className="muted">{copy.section.description}</p>
             </div>
+
+            <nav className="hero-highlights" aria-label={copy.language.ariaLabel}>
+              <a href={buildPublicLanguageHref("es")}>{copy.language.es}</a>
+              <a href={buildPublicLanguageHref("en")}>{copy.language.en}</a>
+            </nav>
 
             {params.created ? (
               <>
                 <ReservationSuccessReset />
-                <p className="notice">Recibimos tu solicitud. En breve, una persona del equipo se comunicará contigo para confirmar disponibilidad.</p>
+                <p className="notice">{copy.messages.created}</p>
               </>
             ) : null}
             {errorMessage ? <p className="notice error">{errorMessage}</p> : null}
 
             <form action={createReservationAction} className="grid">
+              <input type="hidden" name="customerLanguage" value={publicLanguage} />
+              {shouldRenderLanguageParam(publicLanguage) ? <input type="hidden" name="lang" value={publicLanguage} /> : null}
               <div className="grid two">
-                <label>Zona
+                <label>{copy.form.area}
                   <select name="area" defaultValue="Cualquier Mesa Disponible">
-                    <option value="Cualquier Mesa Disponible">Cualquier Mesa Disponible</option>
-                    <option value="Terraza">Terraza</option>
-                    <option value="Tauras Bar & Lounge">Tauras Bar & Lounge</option>
-                    <option value="Salón Sofá">Salón Sofá</option>
+                    {copy.areaOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </select>
                 </label>
-                <label>Cantidad de personas<input name="partySize" type="number" min={1} max={30} defaultValue={1} required /></label>
-                <label>Fecha<input name="reservationDate" type="date" required /></label>
-                <label>Hora disponible
+                <label>{copy.form.partySize}<input name="partySize" type="number" min={1} max={30} defaultValue={1} required /></label>
+                <label>{copy.form.date}<input name="reservationDate" type="date" required /></label>
+                <label>{copy.form.time}
                   <select name="reservationTime" required defaultValue="">
-                    <option value="" disabled>Selecciona una hora</option>
+                    <option value="" disabled>{copy.form.timePlaceholder}</option>
                     {RESERVATION_TIMES.map((time) => <option key={time} value={time}>{time}</option>)}
                   </select>
                 </label>
-                <label>Motivo de la reserva
+                <label>{copy.form.reason}
                   <select name="reason" defaultValue="Ocasional" required>
-                    <option value="Ocasional">Ocasional</option>
-                    <option value="Cumpleaños">Cumpleaños</option>
-                    <option value="Cita">Cita</option>
-                    <option value="Aniversario">Aniversario</option>
-                    <option value="Negocios">Negocios</option>
+                    {copy.reasonOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </select>
                 </label>
-                <label>Nombre<input name="name" required minLength={2} placeholder="Escribe tu nombre" /></label>
-                <label>Email<input name="email" type="email" required placeholder="correo@ejemplo.com" /></label>
-                <label>País
+                <label>{copy.form.name}<input name="name" required minLength={2} placeholder={copy.form.namePlaceholder} /></label>
+                <label>{copy.form.email}<input name="email" type="email" required placeholder={copy.form.emailPlaceholder} /></label>
+                <label>{copy.form.country}
                   <select name="country" defaultValue="Colombia (+57)" required>
-                    {COUNTRIES.map((country) => <option key={country} value={country}>{country}</option>)}
+                    {copy.countries.map((country) => <option key={country.value} value={country.value}>{country.label}</option>)}
                   </select>
                 </label>
-                <label>Teléfono<input name="phone" inputMode="tel" pattern="[0-9+()\s-]{7,25}" required placeholder="3001234567" title="Ingresá un teléfono válido. Podés usar espacios, +, guiones o paréntesis." /></label>
+                <label>{copy.form.phone}<input name="phone" inputMode="tel" pattern="[0-9+()\s-]{7,25}" required placeholder={copy.form.phonePlaceholder} title={copy.form.phoneTitle} /></label>
               </div>
-              <label>Especificaciones
-                <textarea name="notes" rows={4} maxLength={500} placeholder="Intolerancias, celebración, ubicación preferida o comentario extra…" />
+              <label>{copy.form.notes}
+                <textarea name="notes" rows={4} maxLength={500} placeholder={copy.form.notesPlaceholder} />
               </label>
               <div className="consent-grid">
-                <label className="check-row"><input type="checkbox" name="isAdult" required /> Declaro que soy mayor de edad.</label>
-                <label className="check-row"><input type="checkbox" name="dataConsent" required /> Autorizo el tratamiento de mis datos para gestionar la reserva.</label>
+                <label className="check-row"><input type="checkbox" name="isAdult" required /> {copy.form.isAdult}</label>
+                <label className="check-row"><input type="checkbox" name="dataConsent" required /> {copy.form.dataConsent}</label>
               </div>
-              <button type="submit">Solicitar reserva</button>
-              <p className="form-note">No es confirmación automática: cuidamos cada turno para darte una mejor experiencia.</p>
+              <button type="submit">{copy.form.submit}</button>
+              <p className="form-note">{copy.form.note}</p>
             </form>
           </section>
         </div>

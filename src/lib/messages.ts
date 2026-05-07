@@ -9,12 +9,22 @@
 // - Nuevas variantes de error agregan key + mensaje acá; nunca texto libre
 //   en el redirect.
 
+import { parsePublicLanguage } from "@/lib/i18n/language";
+import type { PublicLanguage } from "@/lib/i18n/language";
+
 export const PUBLIC_ERROR_MESSAGES = {
-  "invalid-data": "Datos inválidos. Revisá el formulario.",
-  "rate-limited": "Demasiadas solicitudes desde tu conexión. Esperá un momento antes de volver a intentar.",
+  es: {
+    "invalid-data": "Datos inválidos. Revisá el formulario.",
+    "rate-limited": "Demasiadas solicitudes desde tu conexión. Esperá un momento antes de volver a intentar.",
+  },
+  en: {
+    "invalid-data": "Invalid details. Please review the form.",
+    "rate-limited": "Too many requests from your connection. Please wait a moment before trying again.",
+  },
 } as const;
 
-export type PublicErrorKey = keyof typeof PUBLIC_ERROR_MESSAGES;
+export type PublicMessageDictionary = Record<PublicLanguage, Record<string, string>>;
+export type PublicErrorKey = keyof (typeof PUBLIC_ERROR_MESSAGES)["es"];
 
 export const LOGIN_ERROR_MESSAGES = {
   "invalid-credentials": "Credenciales inválidas.",
@@ -64,5 +74,20 @@ export function lookupMessage<T extends Record<string, string>>(
   if (Object.prototype.hasOwnProperty.call(dict, key)) {
     return dict[key as keyof T];
   }
+  return null;
+}
+
+export function lookupPublicMessage<T extends PublicMessageDictionary>(
+  dict: T,
+  key: string | undefined,
+  language: unknown,
+): string | null {
+  if (!key) return null;
+
+  const messages = dict[parsePublicLanguage(language)];
+  if (Object.prototype.hasOwnProperty.call(messages, key)) {
+    return messages[key];
+  }
+
   return null;
 }
