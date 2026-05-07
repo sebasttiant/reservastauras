@@ -6,6 +6,8 @@ import { prisma } from "@/lib/db";
 import { canTransitionReservation } from "@/lib/reservations/state";
 import { buildReservationSlotAwarenessNotice } from "@/lib/reservations/slot-awareness";
 import { requireAdmin } from "@/lib/auth";
+import { parsePublicLanguage } from "@/lib/i18n/language";
+import type { PublicLanguage } from "@/lib/i18n/language";
 import { RESERVATION_DETAIL_ERROR_MESSAGES, lookupMessage } from "@/lib/messages";
 
 interface ReservationDetailPageProps {
@@ -24,6 +26,11 @@ const STATUS_LABELS: Record<string, string> = {
   [RESERVATION_STATUS.CONFIRMED]: "Confirmada",
   [RESERVATION_STATUS.REJECTED]: "Rechazada",
   [RESERVATION_STATUS.CANCELLED]: "Cancelada",
+};
+
+const CUSTOMER_LANGUAGE_LABELS: Record<PublicLanguage, string> = {
+  es: "Español",
+  en: "Inglés",
 };
 
 export const dynamic = "force-dynamic";
@@ -68,6 +75,7 @@ export default async function ReservationDetailPage({ params, searchParams }: Re
   const canCancel = canTransitionReservation(reservation.status, RESERVATION_STATUS.CANCELLED)
     && reservation.status !== RESERVATION_STATUS.CANCELLED;
   const hasActions = canConfirm || canReject || canCancel;
+  const customerLanguage = parsePublicLanguage(reservation.customerLanguage);
 
   return (
     <main className="admin-shell">
@@ -95,6 +103,7 @@ export default async function ReservationDetailPage({ params, searchParams }: Re
         <dl className="grid two">
           <div><dt>Estado</dt><dd>{STATUS_LABELS[reservation.status]}</dd></div>
           <div><dt>Personas</dt><dd>{reservation.partySize}</dd></div>
+          <div><dt>Idioma del cliente</dt><dd>{CUSTOMER_LANGUAGE_LABELS[customerLanguage]}</dd></div>
           <div><dt>Email</dt><dd>{reservation.user.email}</dd></div>
           <div><dt>Teléfono</dt><dd>{reservation.user.phone ?? "-"}</dd></div>
           <div><dt>Confirmada por</dt><dd>{reservation.confirmedBy?.email ?? "-"}</dd></div>
