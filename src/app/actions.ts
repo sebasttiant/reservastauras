@@ -318,6 +318,7 @@ export async function confirmReservationAction(formData: FormData): Promise<void
       area: confirmed.area,
       confirmedByName: admin.name,
       confirmedByEmail: admin.email,
+      language: parsePublicLanguage(confirmed.customerLanguage),
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error desconocido al enviar email.";
@@ -366,6 +367,7 @@ export async function rejectReservationAction(formData: FormData): Promise<void>
       reservationTime: reservation.reservationTime,
       area: reservation.area,
       reason: reason,
+      language: parsePublicLanguage(reservation.customerLanguage),
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error desconocido al enviar email.";
@@ -411,6 +413,7 @@ export async function cancelReservationAction(formData: FormData): Promise<void>
       reservationDate: reservation.reservationDate,
       reservationTime: reservation.reservationTime,
       area: reservation.area,
+      language: parsePublicLanguage(reservation.customerLanguage),
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error desconocido al enviar email.";

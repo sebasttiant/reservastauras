@@ -10,9 +10,13 @@ const mocks = vi.hoisted(() => ({
   getRequestSecurityContext: vi.fn(),
   recordAuditLog: vi.fn(),
   sendReservationConfirmationEmail: vi.fn(),
+  sendReservationRejectionEmail: vi.fn(),
+  sendReservationCancellationEmail: vi.fn(),
   transaction: vi.fn(),
   findUnique: vi.fn(),
   update: vi.fn(),
+  reservationFindUnique: vi.fn(),
+  reservationUpdate: vi.fn(),
   reservationCreate: vi.fn(),
   userUpsert: vi.fn(),
   checkReservationRateLimit: vi.fn(),
@@ -39,21 +43,24 @@ vi.mock("@/lib/security/request", () => ({
 vi.mock("@/lib/audit", () => ({
   AUDIT_EVENT: {
     RESERVATION_CONFIRMED: "RESERVATION_CONFIRMED",
+    RESERVATION_REJECTED: "RESERVATION_REJECTED",
+    RESERVATION_CANCELLED: "RESERVATION_CANCELLED",
   },
   recordAuditLog: mocks.recordAuditLog,
 }));
 
 vi.mock("@/lib/email", () => ({
-  sendReservationCancellationEmail: vi.fn(),
+  sendReservationCancellationEmail: mocks.sendReservationCancellationEmail,
   sendReservationConfirmationEmail: mocks.sendReservationConfirmationEmail,
-  sendReservationRejectionEmail: vi.fn(),
+  sendReservationRejectionEmail: mocks.sendReservationRejectionEmail,
 }));
 
 vi.mock("@/lib/db", () => ({
   prisma: {
     $transaction: mocks.transaction,
     reservation: {
-      update: vi.fn(),
+      findUnique: mocks.reservationFindUnique,
+      update: mocks.reservationUpdate,
       create: mocks.reservationCreate,
     },
     user: {
@@ -89,6 +96,8 @@ describe("confirmReservationAction", () => {
     mocks.getRequestSecurityContext.mockReturnValue({ ip: "127.0.0.1", userAgent: "vitest" });
     mocks.recordAuditLog.mockResolvedValue(undefined);
     mocks.sendReservationConfirmationEmail.mockResolvedValue(undefined);
+    mocks.sendReservationRejectionEmail.mockResolvedValue(undefined);
+    mocks.sendReservationCancellationEmail.mockResolvedValue(undefined);
     mocks.redirect.mockImplementation((url: string) => {
       throw new Error(`redirect:${url}`);
     });
@@ -158,6 +167,198 @@ describe("confirmReservationAction", () => {
     expect(mocks.sendReservationConfirmationEmail).toHaveBeenCalledOnce();
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/admin");
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/admin/reservations/reservation-1");
+  });
+
+  // PR3: el idioma del email del cliente sale de la columna `customerLanguage`
+  // de la reserva, normalizado defensivamente con `parsePublicLanguage` por si
+  // un valor legacy/corrupto entró por backfill o por una fila vieja.
+  function buildConfirmFixtures(customerLanguage: string) {
+    const reservationDate = new Date("2026-06-10T00:00:00Z");
+    const pendingReservation = {
+      id: "reservation-1",
+      userId: "user-1",
+      reservationDate,
+      reservationTime: "20:00",
+      area: "Patio",
+      partySize: 4,
+      notes: null,
+      status: RESERVATION_STATUS.PENDING,
+      customerLanguage,
+      confirmedAt: null,
+      confirmedById: null,
+      rejectedAt: null,
+      cancelledAt: null,
+      emailError: null,
+      createdAt: new Date("2026-06-01T00:00:00Z"),
+    };
+    const confirmedReservation = {
+      ...pendingReservation,
+      status: RESERVATION_STATUS.CONFIRMED,
+      confirmedAt: new Date("2026-06-02T00:00:00Z"),
+      confirmedById: "admin-1",
+      user: {
+        id: "user-1",
+        name: "Cliente Tauras",
+        email: "cliente@tauras.test",
+        phone: null,
+        createdAt: new Date("2026-06-01T00:00:00Z"),
+      },
+    };
+    const tx = {
+      reservation: {
+        findUnique: mocks.findUnique,
+        update: mocks.update,
+      },
+    };
+    mocks.findUnique.mockResolvedValue(pendingReservation);
+    mocks.update.mockResolvedValue(confirmedReservation);
+    mocks.transaction.mockImplementation(
+      async (callback: (transactionClient: typeof tx) => Promise<unknown>) => callback(tx),
+    );
+  }
+
+  it("forwards the reservation's customerLanguage='en' to the confirmation email", async () => {
+    buildConfirmFixtures("en");
+    const formData = new FormData();
+    formData.set("reservationId", "reservation-1");
+
+    const { confirmReservationAction } = await import("@/app/actions");
+    await expect(confirmReservationAction(formData)).rejects.toThrow(
+      "redirect:/admin/reservations/reservation-1?ok=confirmed",
+    );
+
+    expect(mocks.sendReservationConfirmationEmail).toHaveBeenCalledOnce();
+    const [arg] = mocks.sendReservationConfirmationEmail.mock.calls[0] as [{ language: string }];
+    expect(arg.language).toBe("en");
+  });
+
+  it("defensively falls back to 'es' when customerLanguage is unsupported", async () => {
+    // Cinturón y tirantes: aunque el schema valida 'es'|'en' al persistir, una
+    // fila vieja o un backfill podría tener cualquier string. El parser debe
+    // normalizar a 'es' antes de mandar el email.
+    buildConfirmFixtures("fr");
+    const formData = new FormData();
+    formData.set("reservationId", "reservation-1");
+
+    const { confirmReservationAction } = await import("@/app/actions");
+    await expect(confirmReservationAction(formData)).rejects.toThrow(
+      "redirect:/admin/reservations/reservation-1?ok=confirmed",
+    );
+
+    expect(mocks.sendReservationConfirmationEmail).toHaveBeenCalledOnce();
+    const [arg] = mocks.sendReservationConfirmationEmail.mock.calls[0] as [{ language: string }];
+    expect(arg.language).toBe("es");
+  });
+});
+
+describe("rejectReservationAction (PR3: bilingual email wiring)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.headers.mockResolvedValue(new Headers({ origin: "https://tauras.test" }));
+    mocks.requireAdmin.mockResolvedValue({
+      adminId: "admin-1",
+      name: "Admin Tauras",
+      email: "admin@tauras.test",
+      role: "ADMIN",
+    });
+    mocks.isValidAdminMutationOrigin.mockReturnValue(true);
+    mocks.getRequestSecurityContext.mockReturnValue({ ip: "127.0.0.1", userAgent: "vitest" });
+    mocks.recordAuditLog.mockResolvedValue(undefined);
+    mocks.sendReservationRejectionEmail.mockResolvedValue(undefined);
+    mocks.redirect.mockImplementation((url: string) => {
+      throw new Error(`redirect:${url}`);
+    });
+  });
+
+  it("forwards customerLanguage='en' and the staff reason verbatim", async () => {
+    mocks.reservationFindUnique.mockResolvedValue({
+      id: "reservation-2",
+      userId: "user-2",
+      reservationDate: new Date("2026-06-10T00:00:00Z"),
+      reservationTime: "20:00",
+      area: "Patio",
+      partySize: 2,
+      notes: "Motivo: Cumple\nPaís: Colombia (+57)\nEspecificaciones: -",
+      status: RESERVATION_STATUS.PENDING,
+      customerLanguage: "en",
+      user: {
+        id: "user-2",
+        name: "Client",
+        email: "client@tauras.test",
+        phone: null,
+      },
+    });
+    mocks.reservationUpdate.mockResolvedValue({ id: "reservation-2" });
+
+    const formData = new FormData();
+    formData.set("reservationId", "reservation-2");
+    formData.set("reason", "El restaurante está cerrado por feriado");
+
+    const { rejectReservationAction } = await import("@/app/actions");
+    await expect(rejectReservationAction(formData)).rejects.toThrow(
+      "redirect:/admin/reservations/reservation-2?ok=rejected",
+    );
+
+    expect(mocks.sendReservationRejectionEmail).toHaveBeenCalledOnce();
+    const [arg] = mocks.sendReservationRejectionEmail.mock.calls[0] as [
+      { language: string; reason?: string },
+    ];
+    expect(arg.language).toBe("en");
+    // El motivo del staff NUNCA se traduce: pasa raw al email.
+    expect(arg.reason).toBe("El restaurante está cerrado por feriado");
+  });
+});
+
+describe("cancelReservationAction (PR3: bilingual email wiring)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.headers.mockResolvedValue(new Headers({ origin: "https://tauras.test" }));
+    mocks.requireAdmin.mockResolvedValue({
+      adminId: "admin-1",
+      name: "Admin Tauras",
+      email: "admin@tauras.test",
+      role: "ADMIN",
+    });
+    mocks.isValidAdminMutationOrigin.mockReturnValue(true);
+    mocks.getRequestSecurityContext.mockReturnValue({ ip: "127.0.0.1", userAgent: "vitest" });
+    mocks.recordAuditLog.mockResolvedValue(undefined);
+    mocks.sendReservationCancellationEmail.mockResolvedValue(undefined);
+    mocks.redirect.mockImplementation((url: string) => {
+      throw new Error(`redirect:${url}`);
+    });
+  });
+
+  it("forwards customerLanguage='en' to the cancellation email", async () => {
+    mocks.reservationFindUnique.mockResolvedValue({
+      id: "reservation-3",
+      userId: "user-3",
+      reservationDate: new Date("2026-06-10T00:00:00Z"),
+      reservationTime: "20:00",
+      area: "Patio",
+      partySize: 2,
+      notes: null,
+      status: RESERVATION_STATUS.PENDING,
+      customerLanguage: "en",
+      user: {
+        id: "user-3",
+        name: "Client",
+        email: "client@tauras.test",
+        phone: null,
+      },
+    });
+    mocks.reservationUpdate.mockResolvedValue({ id: "reservation-3" });
+
+    const formData = new FormData();
+    formData.set("reservationId", "reservation-3");
+
+    const { cancelReservationAction } = await import("@/app/actions");
+    await expect(cancelReservationAction(formData)).rejects.toThrow(
+      "redirect:/admin/reservations/reservation-3?ok=cancelled",
+    );
+
+    expect(mocks.sendReservationCancellationEmail).toHaveBeenCalledOnce();
+    const [arg] = mocks.sendReservationCancellationEmail.mock.calls[0] as [{ language: string }];
+    expect(arg.language).toBe("en");
   });
 });
 

@@ -2,6 +2,12 @@ import "server-only";
 import path from "node:path";
 import nodemailer from "nodemailer";
 import { getEnv } from "@/lib/env";
+import type { PublicLanguage } from "@/lib/i18n/language";
+import {
+  getReservationEmailCopy,
+  type ReservationEmailCopy,
+  type ReservationEmailKindCopy,
+} from "@/lib/i18n/reservation-email-dictionary";
 
 export interface ConfirmationEmailInput {
   to: string;
@@ -11,6 +17,7 @@ export interface ConfirmationEmailInput {
   area: string | null;
   confirmedByName: string;
   confirmedByEmail: string;
+  language: PublicLanguage;
 }
 
 export interface RejectionEmailInput {
@@ -20,6 +27,7 @@ export interface RejectionEmailInput {
   reservationTime: string;
   area: string | null;
   reason?: string;
+  language: PublicLanguage;
 }
 
 export interface CancellationEmailInput {
@@ -28,16 +36,16 @@ export interface CancellationEmailInput {
   reservationDate: Date;
   reservationTime: string;
   area: string | null;
+  language: PublicLanguage;
 }
 
 interface ReservationEmailTemplateInput {
-  title: string;
+  copy: ReservationEmailCopy;
+  kindCopy: ReservationEmailKindCopy;
   greetingName: string;
-  introHtml: string;
   reservationDate: Date;
   reservationTime: string;
   area: string | null;
-  footerHtml: string;
   extraRows?: string;
 }
 
@@ -70,8 +78,8 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
-function formatReservationDate(date: Date): string {
-  return date.toLocaleDateString("es-CO", {
+function formatReservationDate(date: Date, locale: ReservationEmailCopy["dateLocale"]): string {
+  return date.toLocaleDateString(locale, {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -83,6 +91,7 @@ function buildLogoAttachments() {
   return [{ filename: "tauras.png", path: path.join(process.cwd(), "public", "tauras.png"), cid: TAURAS_LOGO_CID }];
 }
 
+// IMPORTANT: `value` se interpola raw. Quien llama es responsable de pasar HTML seguro (escapado o autor-controlado). NO agregar escapeHtml acá: las filas con <strong> u otros tags de copy lo necesitan crudo.
 function detailRow(label: string, value: string, withBorder = true): string {
   return `
     <tr>
@@ -94,9 +103,10 @@ function detailRow(label: string, value: string, withBorder = true): string {
 }
 
 function buildReservationEmailHtml(input: ReservationEmailTemplateInput): string {
-  const date = escapeHtml(formatReservationDate(input.reservationDate));
+  const { copy, kindCopy } = input;
+  const date = escapeHtml(formatReservationDate(input.reservationDate, copy.dateLocale));
   const time = escapeHtml(input.reservationTime);
-  const area = escapeHtml(input.area || "A designar");
+  const area = escapeHtml(input.area || copy.labels.areaTbd);
   const name = escapeHtml(input.greetingName);
 
   return `
@@ -118,29 +128,29 @@ function buildReservationEmailHtml(input: ReservationEmailTemplateInput): string
           </tr>
           <tr>
             <td style="padding: 40px 30px;">
-              <h2 style="color: #1a1a2e; margin: 0 0 20px 0; font-size: 20px;">${escapeHtml(input.title)}</h2>
+              <h2 style="color: #1a1a2e; margin: 0 0 20px 0; font-size: 20px;">${escapeHtml(kindCopy.title)}</h2>
               <p style="color: #444444; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
-                Hola <strong>${name}</strong>,<br><br>
-                ${input.introHtml}
+                ${escapeHtml(copy.greeting)} <strong>${name}</strong>,<br><br>
+                ${kindCopy.introHtml}
               </p>
               <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8f8f8; border-radius: 6px; margin: 20px 0;">
                 <tr>
                   <td style="padding: 20px;">
                     <table width="100%" cellpadding="0" cellspacing="0">
-                      ${detailRow("Fecha", date)}
-                      ${detailRow("Hora", `${time} h`)}
-                      ${detailRow("Sector", area, !input.extraRows)}
+                      ${detailRow(copy.labels.date, date)}
+                      ${detailRow(copy.labels.time, `${time}${escapeHtml(copy.timeSuffix)}`)}
+                      ${detailRow(copy.labels.area, area, !input.extraRows)}
                       ${input.extraRows ?? ""}
                     </table>
                   </td>
                 </tr>
               </table>
-              <p style="color: #666666; font-size: 14px; line-height: 1.6; margin: 0;">${input.footerHtml}</p>
+              <p style="color: #666666; font-size: 14px; line-height: 1.6; margin: 0;">${kindCopy.footerHtml}</p>
             </td>
           </tr>
           <tr>
             <td style="background-color: #f5f5f5; padding: 20px 30px; text-align: center;">
-              <p style="color: #999999; font-size: 12px; margin: 0;">© ${new Date().getFullYear()} TAURAS Steakhouse. Todos los derechos reservados.</p>
+              <p style="color: #999999; font-size: 12px; margin: 0;">© ${new Date().getFullYear()} TAURAS Steakhouse. ${escapeHtml(copy.rightsReserved)}</p>
             </td>
           </tr>
         </table>
@@ -153,22 +163,23 @@ function buildReservationEmailHtml(input: ReservationEmailTemplateInput): string
 
 export async function sendReservationConfirmationEmail(input: ConfirmationEmailInput): Promise<void> {
   const { env, transporter } = createTransporter();
+  const copy = getReservationEmailCopy(input.language);
+  const kindCopy = copy.confirmation;
   const confirmedBy = `${escapeHtml(input.confirmedByName)} (${escapeHtml(input.confirmedByEmail)})`;
   const html = buildReservationEmailHtml({
-    title: "¡Tu reserva ha sido confirmada!",
+    copy,
+    kindCopy,
     greetingName: input.name,
-    introHtml: "Nos complace informarte que tu reserva ha sido <strong>confirmada exitosamente</strong>.",
     reservationDate: input.reservationDate,
     reservationTime: input.reservationTime,
     area: input.area,
-    extraRows: detailRow("Confirmado por", confirmedBy, false),
-    footerHtml: "Te esperamos en TAURAS. Si necesitas modificar o cancelar tu reserva, por favor contáctanos con anticipación.",
+    extraRows: detailRow(copy.labels.confirmedBy, confirmedBy, false),
   });
 
   await transporter.sendMail({
     from: env.SMTP_FROM,
     to: input.to,
-    subject: "Tu reserva en TAURAS ha sido confirmada",
+    subject: kindCopy.subject,
     html,
     attachments: buildLogoAttachments(),
   });
@@ -176,22 +187,23 @@ export async function sendReservationConfirmationEmail(input: ConfirmationEmailI
 
 export async function sendReservationRejectionEmail(input: RejectionEmailInput): Promise<void> {
   const { env, transporter } = createTransporter();
-  const reasonRow = input.reason ? detailRow("Motivo", escapeHtml(input.reason), false) : undefined;
+  const copy = getReservationEmailCopy(input.language);
+  const kindCopy = copy.rejection;
+  const reasonRow = input.reason ? detailRow(copy.labels.reason, escapeHtml(input.reason), false) : undefined;
   const html = buildReservationEmailHtml({
-    title: "No pudimos confirmar tu reserva",
+    copy,
+    kindCopy,
     greetingName: input.name,
-    introHtml: "Lamentamos informarte que tu solicitud de reserva <strong>no pudo ser confirmada</strong> en esta oportunidad.",
     reservationDate: input.reservationDate,
     reservationTime: input.reservationTime,
     area: input.area,
     extraRows: reasonRow,
-    footerHtml: "Te esperamos en otra oportunidad. Si deseas, puedes realizar una nueva solicitud con otra fecha u horario.",
   });
 
   await transporter.sendMail({
     from: env.SMTP_FROM,
     to: input.to,
-    subject: "Tu solicitud de reserva en TAURAS",
+    subject: kindCopy.subject,
     html,
     attachments: buildLogoAttachments(),
   });
@@ -199,20 +211,21 @@ export async function sendReservationRejectionEmail(input: RejectionEmailInput):
 
 export async function sendReservationCancellationEmail(input: CancellationEmailInput): Promise<void> {
   const { env, transporter } = createTransporter();
+  const copy = getReservationEmailCopy(input.language);
+  const kindCopy = copy.cancellation;
   const html = buildReservationEmailHtml({
-    title: "Tu reserva ha sido cancelada",
+    copy,
+    kindCopy,
     greetingName: input.name,
-    introHtml: "Te informamos que tu reserva ha sido <strong>cancelada</strong>.",
     reservationDate: input.reservationDate,
     reservationTime: input.reservationTime,
     area: input.area,
-    footerHtml: "Si necesitas una nueva reserva, estaremos atentos para ayudarte a coordinar otra fecha u horario.",
   });
 
   await transporter.sendMail({
     from: env.SMTP_FROM,
     to: input.to,
-    subject: "Tu reserva en TAURAS ha sido cancelada",
+    subject: kindCopy.subject,
     html,
     attachments: buildLogoAttachments(),
   });
