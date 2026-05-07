@@ -1,4 +1,4 @@
-FROM node:24.15.0-trixie-slim AS base
+FROM node:26.0.0-trixie-slim AS base
 ARG NPM_VERSION=11.14.0
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
