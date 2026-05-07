@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ADMIN_ROLE } from "@/lib/constants";
+import { DEFAULT_PUBLIC_LANGUAGE, publicLanguageSchema } from "@/lib/i18n/language";
 
 // Zona horaria del negocio. Las reglas calendario (hoy/ayer/futuro) se
 // resuelven contra esta zona, no contra UTC ni la del proceso.
@@ -60,6 +61,12 @@ export const reservationRequestSchema = z.object({
   notes: z.string().trim().max(500).optional(),
   isAdult: checkboxSchema,
   dataConsent: checkboxSchema,
+  // Deploy-safe: callers anteriores (formulario actual sin idioma) siguen
+  // funcionando porque el campo ausente cae al default `"es"`. Pero un valor
+  // explícito no soportado (ej. `"foo"`) DEBE fallar para no persistir ni
+  // “corregir” idiomas inválidos en silencio. El mensaje de Zod queda interno:
+  // el cliente recibe la key opaca `invalid-data` desde la action, no este texto.
+  customerLanguage: publicLanguageSchema.default(DEFAULT_PUBLIC_LANGUAGE),
 });
 
 export const loginSchema = z.object({

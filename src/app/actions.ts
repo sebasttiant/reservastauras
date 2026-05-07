@@ -9,6 +9,11 @@ import { hash } from "bcryptjs";
 import { RESERVATION_STATUS } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { sendReservationCancellationEmail, sendReservationConfirmationEmail, sendReservationRejectionEmail } from "@/lib/email";
+import {
+  DEFAULT_PUBLIC_LANGUAGE,
+  parsePublicLanguage,
+  type PublicLanguage,
+} from "@/lib/i18n/language";
 import { canTransitionReservation } from "@/lib/reservations/state";
 import { createAdminSchema, formDataToRecord, loginSchema, reservationRequestSchema, toggleAdminSchema } from "@/lib/validation";
 import { requireAdmin, requireSuperAdmin, signInAdmin, signOutAdmin } from "@/lib/auth";
@@ -46,6 +51,23 @@ function redirectWithSuccess(path: string, key: string): never {
   redirect(`${path}?${query.toString()}` as Route);
 }
 
+// Construye el redirect público preservando SOLO un `lang` ya saneado.
+// Cualquier valor inválido del cliente ya fue normalizado a `DEFAULT_PUBLIC_LANGUAGE`
+// por `parsePublicLanguage`. Acá decidimos además omitir `lang` cuando es el
+// idioma por defecto (es), para no ensuciar URLs ni caches con un valor implícito.
+function buildPublicRedirect(language: PublicLanguage, params: Record<string, string>): string {
+  const query = new URLSearchParams(params);
+  if (language !== DEFAULT_PUBLIC_LANGUAGE) {
+    query.set("lang", language);
+  }
+  const qs = query.toString();
+  return qs ? `/?${qs}` : "/";
+}
+
+function redirectPublicWithError(language: PublicLanguage, errorKey: string): never {
+  redirect(buildPublicRedirect(language, { error: errorKey }) as Route);
+}
+
 async function requireValidAdminMutationRequest(path: string): Promise<Headers> {
   const requestHeaders = await headers();
   if (!isValidAdminMutationOrigin(requestHeaders)) {
@@ -58,13 +80,20 @@ async function requireValidAdminMutationRequest(path: string): Promise<Headers> 
 export async function createReservationAction(formData: FormData): Promise<void> {
   const requestHeaders = await headers();
   const ipKey = getClientIp(requestHeaders);
+
+  // Saneamos el `lang` del cliente ANTES de validar el resto: tanto el rate
+  // limit como un fallo de validación redirigen al público, y queremos que
+  // valores no soportados (`?lang=fr`) no se propaguen jamás a la URL ni se
+  // usen como base de un open redirect.
+  const requestedLanguage = parsePublicLanguage(formData.get("lang"));
+
   const rateCheck = checkReservationRateLimit({ ipKey });
   if (!rateCheck.allowed) {
-    redirectWithError("/", "rate-limited");
+    redirectPublicWithError(requestedLanguage, "rate-limited");
   }
 
   const parsed = reservationRequestSchema.safeParse(formDataToRecord(formData));
-  if (!parsed.success) redirectWithError("/", "invalid-data");
+  if (!parsed.success) redirectPublicWithError(requestedLanguage, "invalid-data");
 
   const input = parsed.data;
   const user = await prisma.user.upsert({
@@ -80,13 +109,19 @@ export async function createReservationAction(formData: FormData): Promise<void>
       reservationTime: input.reservationTime,
       area: normalizeOptionalText(input.area),
       partySize: input.partySize,
+      // Las notas administrativas se mantienen siempre en español/internal:
+      // el motivo/país/notas son valores canónicos, no copy localizado.
       notes: buildReservationNotes(input.reason, input.country, input.notes),
       status: RESERVATION_STATUS.PENDING,
+      // Persistimos el idioma canónico validado por Zod, no el `lang` de la URL.
+      // Esto desacopla el query (que puede venir corrupto) del valor que usaremos
+      // luego para mandar emails al cliente.
+      customerLanguage: input.customerLanguage,
     },
   });
 
   revalidatePath("/admin");
-  redirect("/?created=1");
+  redirect(buildPublicRedirect(input.customerLanguage, { created: "1" }) as Route);
 }
 
 export async function loginAction(formData: FormData): Promise<void> {

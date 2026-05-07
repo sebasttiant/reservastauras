@@ -49,6 +49,7 @@ model Reservation {
   area            String?
   partySize       Int
   notes           String?
+  customerLanguage String           @default("es")
   status          ReservationStatus @default(PENDING)
   confirmedAt     DateTime?
   confirmedById   String?
