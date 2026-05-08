@@ -1,10 +1,28 @@
 import Link from "next/link";
+import type { Route } from "next";
 import { Prisma, type ReservationStatus } from "@prisma/client";
 import { logoutAction } from "@/app/actions";
 import { ADMIN_ROLE, RESERVATION_STATUS } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 import { ADMIN_ERROR_MESSAGES, lookupMessage } from "@/lib/messages";
+import { AdminReservationFilters } from "./_components/admin-reservation-filters";
+
+// Construye la URL del export forwardeando los filtros activos del dashboard.
+// `q` y `date` espejan los nombres del dashboard; `from`/`to` no se usan acá
+// — esos los elige el admin desde la sección "Exportar reportes".
+function buildExportHref(input: {
+  format: "xlsx" | "pdf";
+  status: string | undefined;
+  q: string | undefined;
+  date: string | undefined;
+}): Route {
+  const sp = new URLSearchParams({ format: input.format });
+  if (input.status) sp.set("status", input.status);
+  if (input.q) sp.set("q", input.q);
+  if (input.date) sp.set("date", input.date);
+  return `/api/export?${sp.toString()}` as Route;
+}
 
 interface AdminPageProps {
   searchParams: Promise<Record<string, string | undefined>>;
@@ -51,6 +69,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const counts = new Map(summary.map((item) => [item.status, item._count.status]));
   const errorMessage = lookupMessage(ADMIN_ERROR_MESSAGES, params.error);
 
+  const hasActiveFilters = Boolean(status || query || date);
+  const exportXlsxHref = buildExportHref({ format: "xlsx", status, q: query, date });
+  const exportPdfHref = buildExportHref({ format: "pdf", status, q: query, date });
+
   return (
     <main className="admin-shell">
       <header className="admin-header">
@@ -63,8 +85,12 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           <Link className="button" href="/admin/reservations/new">Nueva reserva</Link>
           {admin.role === ADMIN_ROLE.SUPER_ADMIN ? (
             <>
-              <Link className="button" href="/api/export?format=xlsx">Exportar Excel</Link>
-              <Link className="button" href="/api/export?format=pdf">Exportar PDF</Link>
+              {hasActiveFilters ? (
+                <>
+                  <Link className="button" href={exportXlsxHref}>Exportar Excel filtrado</Link>
+                  <Link className="button" href={exportPdfHref}>Exportar PDF filtrado</Link>
+                </>
+              ) : null}
               <Link className="button secondary" href="/admin/users">Usuarios</Link>
               <Link className="button secondary" href="/admin/settings/email">Correo</Link>
             </>
@@ -80,17 +106,37 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         {Object.values(RESERVATION_STATUS).map((item) => <Link key={item} href={`/admin?status=${item}`}>{STATUS_LABELS[item]}</Link>)}
       </nav>
 
-      <form className="card grid two" action="/admin">
-        <label>Buscar cliente, email, teléfono o zona
-          <input name="q" defaultValue={query ?? ""} placeholder="Ej: Laura, admin@email.com, Terraza" />
-        </label>
-        <label>Fecha exacta
-          <input name="date" type="date" defaultValue={date ?? ""} />
-        </label>
-        {status ? <input type="hidden" name="status" value={status} /> : null}
-        <button type="submit">Filtrar histórico</button>
-        <Link className="button secondary" href="/admin">Limpiar filtros</Link>
-      </form>
+      <AdminReservationFilters key={`${status ?? ""}-${query ?? ""}-${date ?? ""}`} query={query ?? ""} date={date ?? ""} status={status} />
+
+      {admin.role === ADMIN_ROLE.SUPER_ADMIN ? (
+        <section className="card grid" aria-label="Exportar reportes">
+          <div className="section-heading">
+            <h2>Exportar por rango de fechas</h2>
+            <p className="muted">
+              Seleccioná un rango de fechas para evitar reportes demasiado grandes. Los botones superiores exportan solo la vista filtrada actual.
+            </p>
+          </div>
+          <form action="/api/export" method="get" className="grid">
+            <div className="grid two">
+              <label>Desde
+                <input name="from" type="date" required />
+              </label>
+              <label>Hasta
+                <input name="to" type="date" required />
+              </label>
+            </div>
+            <div className="actions">
+              <button type="submit" name="format" value="xlsx">Exportar Excel por rango</button>
+              <button type="submit" name="format" value="pdf" className="secondary">Exportar PDF por rango</button>
+            </div>
+          </form>
+          <p className="notice muted-notice" role="note">
+            {hasActiveFilters
+              ? "Los botones superiores exportan con los filtros activos del dashboard. Esta sección genera un reporte por rango de fechas independiente."
+              : "Para exportar, aplicá un filtro en la vista o generá un reporte por rango de fechas."}
+          </p>
+        </section>
+      ) : null}
 
       <section className="dashboard-summary" aria-label="Resumen de reservas">
         <article className="summary-card">

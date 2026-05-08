@@ -60,7 +60,8 @@
     "overrides": {
       "picomatch@4.0.3": "4.0.4",
       "postcss": "8.5.14",
-      "@hono/node-server@1.19.11": "1.19.14"
+      "@hono/node-server@1.19.11": "1.19.14",
+      "fast-uri": "3.1.1"
     }
   }
 }

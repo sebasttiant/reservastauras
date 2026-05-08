@@ -99,6 +99,62 @@ describe("GET /api/export — filter validation", () => {
     const args = mocks.reservationFindMany.mock.calls[0]?.[0];
     expect(args?.where?.status).toBe("CONFIRMED");
   });
+
+  it("forwards `q` into a Prisma OR clause across name/email/phone/area", async () => {
+    const { GET } = await import("@/app/api/export/route");
+    const res = await GET(new Request("http://localhost/api/export?format=json&q=Laura"));
+    expect(res.status).toBe(200);
+    const args = mocks.reservationFindMany.mock.calls[0]?.[0];
+    expect(args?.where?.OR).toEqual([
+      { user: { name: { contains: "Laura", mode: "insensitive" } } },
+      { user: { email: { contains: "Laura", mode: "insensitive" } } },
+      { user: { phone: { contains: "Laura", mode: "insensitive" } } },
+      { area: { contains: "Laura", mode: "insensitive" } },
+    ]);
+  });
+
+  it("treats whitespace-only `q` as absent (no 400, no OR clause)", async () => {
+    const { GET } = await import("@/app/api/export/route");
+    const res = await GET(new Request("http://localhost/api/export?format=json&q=%20%20%20"));
+    expect(res.status).toBe(200);
+    const args = mocks.reservationFindMany.mock.calls[0]?.[0];
+    expect(args?.where?.OR).toBeUndefined();
+  });
+
+  it("returns 400 when `date` is combined with `from`/`to`", async () => {
+    const { GET } = await import("@/app/api/export/route");
+    const res = await GET(
+      new Request("http://localhost/api/export?date=2026-05-08&from=2026-05-01"),
+    );
+    expect(res.status).toBe(400);
+    expect(mocks.reservationFindMany).not.toHaveBeenCalled();
+  });
+
+  it("forwards `date` as a closed same-day range in prisma where", async () => {
+    const { GET } = await import("@/app/api/export/route");
+    const res = await GET(
+      new Request("http://localhost/api/export?format=json&date=2026-05-08"),
+    );
+    expect(res.status).toBe(200);
+    const args = mocks.reservationFindMany.mock.calls[0]?.[0];
+    expect(args?.where?.reservationDate?.gte?.toISOString()).toBe("2026-05-08T00:00:00.000Z");
+    expect(args?.where?.reservationDate?.lte?.toISOString()).toBe("2026-05-08T23:59:59.999Z");
+  });
+});
+
+describe("GET /api/export — audit metadata records q/date", () => {
+  it("includes q and date in the audit metadata filters", async () => {
+    const { GET } = await import("@/app/api/export/route");
+    const res = await GET(
+      new Request("http://localhost/api/export?format=json&q=Laura&date=2026-05-08"),
+    );
+    expect(res.status).toBe(200);
+    expect(mocks.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      metadata: expect.objectContaining({
+        filters: expect.objectContaining({ q: "Laura", date: "2026-05-08" }),
+      }),
+    }));
+  });
 });
 
 describe("GET /api/export — limit", () => {
