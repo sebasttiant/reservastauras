@@ -40,9 +40,11 @@ vi.mock("@/lib/security/request", () => ({
   isValidAdminMutationOrigin: mocks.isValidAdminMutationOrigin,
 }));
 
-vi.mock("@/lib/audit", () => ({
+  vi.mock("@/lib/audit", () => ({
   AUDIT_EVENT: {
+    RESERVATION_MANUAL_CREATED: "RESERVATION_MANUAL_CREATED",
     RESERVATION_CONFIRMED: "RESERVATION_CONFIRMED",
+    RESERVATION_CONFIRMATION_EMAIL_RESENT: "RESERVATION_CONFIRMATION_EMAIL_RESENT",
     RESERVATION_REJECTED: "RESERVATION_REJECTED",
     RESERVATION_CANCELLED: "RESERVATION_CANCELLED",
   },
@@ -248,6 +250,204 @@ describe("confirmReservationAction", () => {
     expect(mocks.sendReservationConfirmationEmail).toHaveBeenCalledOnce();
     const [arg] = mocks.sendReservationConfirmationEmail.mock.calls[0] as [{ language: string }];
     expect(arg.language).toBe("es");
+  });
+});
+
+describe("resendConfirmationEmailAction", () => {
+  type ConfirmedReservationOverrides = {
+    status?: string;
+    customerLanguage?: string;
+    confirmedBy?: { id: string; name: string; email: string } | null;
+    confirmedById?: string | null;
+    emailError?: string | null;
+  };
+
+  function buildConfirmedReservation(overrides: ConfirmedReservationOverrides = {}) {
+    // Importante: usamos `in` en lugar de `??` para `confirmedBy` y
+    // `confirmedById` porque queremos respetar el override `null` (modela el
+    // caso "el admin que confirmó fue dado de baja y la FK quedó SET NULL").
+    return {
+      id: "reservation-resend-1",
+      userId: "user-resend-1",
+      reservationDate: new Date("2026-06-10T00:00:00Z"),
+      reservationTime: "20:00",
+      area: "Patio",
+      partySize: 4,
+      notes: null,
+      status: overrides.status ?? RESERVATION_STATUS.CONFIRMED,
+      customerLanguage: overrides.customerLanguage ?? "es",
+      confirmedAt: new Date("2026-06-02T00:00:00Z"),
+      confirmedById: "confirmedById" in overrides ? overrides.confirmedById : "admin-original",
+      confirmedBy: "confirmedBy" in overrides ? overrides.confirmedBy : {
+        id: "admin-original",
+        name: "Admin Original",
+        email: "original@tauras.test",
+      },
+      rejectedAt: null,
+      cancelledAt: null,
+      emailError: overrides.emailError ?? null,
+      createdAt: new Date("2026-06-01T00:00:00Z"),
+      user: {
+        id: "user-resend-1",
+        name: "Cliente Tauras",
+        email: "cliente@tauras.test",
+        phone: null,
+      },
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.headers.mockResolvedValue(new Headers({ origin: "https://tauras.test" }));
+    mocks.requireAdmin.mockResolvedValue({
+      adminId: "admin-current",
+      name: "Admin Actual",
+      email: "actual@tauras.test",
+      role: "ADMIN",
+    });
+    mocks.isValidAdminMutationOrigin.mockReturnValue(true);
+    mocks.getRequestSecurityContext.mockReturnValue({ ip: "127.0.0.1", userAgent: "vitest" });
+    mocks.recordAuditLog.mockResolvedValue(undefined);
+    mocks.sendReservationConfirmationEmail.mockResolvedValue(undefined);
+    mocks.reservationUpdate.mockResolvedValue({ id: "reservation-resend-1" });
+    mocks.redirect.mockImplementation((url: string) => {
+      throw new Error(`redirect:${url}`);
+    });
+  });
+
+  it("re-sends the email using confirmedBy as the responsible person and clears emailError on success", async () => {
+    mocks.reservationFindUnique.mockResolvedValue(
+      buildConfirmedReservation({ emailError: "Previous SMTP timeout" }),
+    );
+
+    const formData = new FormData();
+    formData.set("reservationId", "reservation-resend-1");
+
+    const { resendConfirmationEmailAction } = await import("@/app/actions");
+    await expect(resendConfirmationEmailAction(formData)).rejects.toThrow(
+      "redirect:/admin/reservations/reservation-resend-1?ok=email-resent",
+    );
+
+    expect(mocks.sendReservationConfirmationEmail).toHaveBeenCalledOnce();
+    const [arg] = mocks.sendReservationConfirmationEmail.mock.calls[0] as [{
+      to: string; confirmedByName: string; confirmedByEmail: string; language: string;
+    }];
+    expect(arg.to).toBe("cliente@tauras.test");
+    expect(arg.confirmedByName).toBe("Admin Original");
+    expect(arg.confirmedByEmail).toBe("original@tauras.test");
+    expect(arg.language).toBe("es");
+
+    // emailError debe limpiarse en el éxito (un envío anterior podría haber
+    // dejado un mensaje pegado).
+    expect(mocks.reservationUpdate).toHaveBeenCalledWith({
+      where: { id: "reservation-resend-1" },
+      data: { emailError: null },
+    });
+
+    expect(mocks.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      event: "RESERVATION_CONFIRMATION_EMAIL_RESENT",
+      resourceId: "reservation-resend-1",
+    }));
+    // outcome no se setea explícito en el éxito (audit lo defaultea a SUCCESS).
+    expect(mocks.recordAuditLog.mock.calls[0]?.[0]?.outcome).toBeUndefined();
+  });
+
+  it("falls back to the current admin when confirmedBy was deleted (FK SET NULL)", async () => {
+    mocks.reservationFindUnique.mockResolvedValue(
+      buildConfirmedReservation({ confirmedBy: null, confirmedById: null }),
+    );
+
+    const formData = new FormData();
+    formData.set("reservationId", "reservation-resend-1");
+
+    const { resendConfirmationEmailAction } = await import("@/app/actions");
+    await expect(resendConfirmationEmailAction(formData)).rejects.toThrow(
+      "redirect:/admin/reservations/reservation-resend-1?ok=email-resent",
+    );
+
+    const [arg] = mocks.sendReservationConfirmationEmail.mock.calls[0] as [{
+      confirmedByName: string; confirmedByEmail: string;
+    }];
+    expect(arg.confirmedByName).toBe("Admin Actual");
+    expect(arg.confirmedByEmail).toBe("actual@tauras.test");
+  });
+
+  it("forwards customerLanguage='en' to the confirmation email on resend", async () => {
+    mocks.reservationFindUnique.mockResolvedValue(
+      buildConfirmedReservation({ customerLanguage: "en" }),
+    );
+
+    const formData = new FormData();
+    formData.set("reservationId", "reservation-resend-1");
+
+    const { resendConfirmationEmailAction } = await import("@/app/actions");
+    await expect(resendConfirmationEmailAction(formData)).rejects.toThrow(
+      "redirect:/admin/reservations/reservation-resend-1?ok=email-resent",
+    );
+
+    const [arg] = mocks.sendReservationConfirmationEmail.mock.calls[0] as [{ language: string }];
+    expect(arg.language).toBe("en");
+  });
+
+  it("rejects reservations that are not CONFIRMED with invalid-state-resend", async () => {
+    mocks.reservationFindUnique.mockResolvedValue(
+      buildConfirmedReservation({ status: RESERVATION_STATUS.PENDING }),
+    );
+
+    const formData = new FormData();
+    formData.set("reservationId", "reservation-resend-1");
+
+    const { resendConfirmationEmailAction } = await import("@/app/actions");
+    await expect(resendConfirmationEmailAction(formData)).rejects.toThrow(
+      "redirect:/admin/reservations/reservation-resend-1?error=invalid-state-resend",
+    );
+
+    expect(mocks.sendReservationConfirmationEmail).not.toHaveBeenCalled();
+    expect(mocks.reservationUpdate).not.toHaveBeenCalled();
+    expect(mocks.recordAuditLog).not.toHaveBeenCalled();
+  });
+
+  it("redirects with not-found when the reservation does not exist", async () => {
+    mocks.reservationFindUnique.mockResolvedValue(null);
+
+    const formData = new FormData();
+    formData.set("reservationId", "missing");
+
+    const { resendConfirmationEmailAction } = await import("@/app/actions");
+    await expect(resendConfirmationEmailAction(formData)).rejects.toThrow(
+      "redirect:/admin/reservations/missing?error=not-found",
+    );
+
+    expect(mocks.sendReservationConfirmationEmail).not.toHaveBeenCalled();
+  });
+
+  it("on SMTP failure: persists emailError, keeps status, audits FAILURE, and redirects with email-resend-failed", async () => {
+    mocks.reservationFindUnique.mockResolvedValue(buildConfirmedReservation());
+    mocks.sendReservationConfirmationEmail.mockRejectedValueOnce(new Error("SMTP timeout"));
+
+    const formData = new FormData();
+    formData.set("reservationId", "reservation-resend-1");
+
+    const { resendConfirmationEmailAction } = await import("@/app/actions");
+    await expect(resendConfirmationEmailAction(formData)).rejects.toThrow(
+      "redirect:/admin/reservations/reservation-resend-1?error=email-resend-failed",
+    );
+
+    // Solo se persiste emailError, NUNCA status. La reserva sigue confirmada.
+    expect(mocks.reservationUpdate).toHaveBeenCalledOnce();
+    expect(mocks.reservationUpdate).toHaveBeenCalledWith({
+      where: { id: "reservation-resend-1" },
+      data: { emailError: "SMTP timeout" },
+    });
+    const updateArgs = mocks.reservationUpdate.mock.calls[0]?.[0] as { data: Record<string, unknown> };
+    expect(updateArgs.data.status).toBeUndefined();
+
+    expect(mocks.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      event: "RESERVATION_CONFIRMATION_EMAIL_RESENT",
+      outcome: "FAILURE",
+      resourceId: "reservation-resend-1",
+      metadata: expect.objectContaining({ error: "SMTP timeout" }),
+    }));
   });
 });
 
@@ -476,6 +676,124 @@ describe("createReservationAction (persistencia bilingüe + redirects saneados)"
     const { createReservationAction } = await import("@/app/actions");
 
     await expect(createReservationAction(formData)).rejects.toThrow("redirect:/?error=rate-limited");
+    expect(mocks.reservationCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe("createManualReservationAction", () => {
+  const FROZEN_INSTANT = new Date("2026-05-04T02:00:00.000Z");
+  const FAR_FUTURE = "2026-12-31";
+
+  function buildManualFormData(extra: Record<string, string> = {}): FormData {
+    const formData = new FormData();
+    const fields = {
+      name: "Cliente WhatsApp",
+      email: "cliente.whatsapp@example.com",
+      phone: "+57 300 123 4567",
+      reservationDate: FAR_FUTURE,
+      reservationTime: "21:30",
+      area: "Terraza",
+      partySize: "5",
+      source: "whatsapp",
+      status: RESERVATION_STATUS.PENDING,
+      notes: "Pidió mesa tranquila por WhatsApp",
+      customerLanguage: "es",
+      ...extra,
+    };
+
+    for (const [key, value] of Object.entries(fields)) {
+      formData.set(key, value);
+    }
+
+    return formData;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(FROZEN_INSTANT);
+
+    mocks.headers.mockResolvedValue(new Headers({ origin: "https://tauras.test" }));
+    mocks.requireAdmin.mockResolvedValue({
+      adminId: "admin-1",
+      name: "Admin Tauras",
+      email: "admin@tauras.test",
+      role: "ADMIN",
+    });
+    mocks.isValidAdminMutationOrigin.mockReturnValue(true);
+    mocks.getRequestSecurityContext.mockReturnValue({ ip: "127.0.0.1", userAgent: "vitest" });
+    mocks.recordAuditLog.mockResolvedValue(undefined);
+    mocks.userUpsert.mockResolvedValue({ id: "user-manual-1" });
+    mocks.reservationCreate.mockResolvedValue({ id: "reservation-manual-1" });
+    mocks.redirect.mockImplementation((url: string) => {
+      throw new Error(`redirect:${url}`);
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("crea una reserva manual pendiente con origen y admin creador sin enviar emails", async () => {
+    const { createManualReservationAction } = await import("@/app/actions");
+
+    await expect(createManualReservationAction(buildManualFormData())).rejects.toThrow(
+      "redirect:/admin/reservations/reservation-manual-1?ok=manual-created",
+    );
+
+    expect(mocks.userUpsert).toHaveBeenCalledWith({
+      where: { email: "cliente.whatsapp@example.com" },
+      update: { name: "Cliente WhatsApp", phone: "573001234567" },
+      create: { email: "cliente.whatsapp@example.com", name: "Cliente WhatsApp", phone: "573001234567" },
+    });
+    expect(mocks.reservationCreate).toHaveBeenCalledWith({
+      data: {
+        userId: "user-manual-1",
+        reservationDate: new Date(`${FAR_FUTURE}T00:00:00.000Z`),
+        reservationTime: "21:30",
+        area: "Terraza",
+        partySize: 5,
+        notes: "Pidió mesa tranquila por WhatsApp",
+        status: RESERVATION_STATUS.PENDING,
+        customerLanguage: "es",
+        source: "whatsapp",
+        createdByAdminId: "admin-1",
+      },
+      select: { id: true },
+    });
+    expect(mocks.sendReservationConfirmationEmail).not.toHaveBeenCalled();
+    expect(mocks.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      event: "RESERVATION_MANUAL_CREATED",
+      resourceId: "reservation-manual-1",
+      metadata: { source: "whatsapp", status: RESERVATION_STATUS.PENDING },
+    }));
+  });
+
+  it("permite crearla confirmada desde admin sin disparar email automático", async () => {
+    const { createManualReservationAction } = await import("@/app/actions");
+
+    await expect(createManualReservationAction(buildManualFormData({
+      source: "instagram",
+      status: RESERVATION_STATUS.CONFIRMED,
+      notes: "Confirmada por DM antes de cargarla",
+    }))).rejects.toThrow("redirect:/admin/reservations/reservation-manual-1?ok=manual-created");
+
+    const createArgs = mocks.reservationCreate.mock.calls[0]?.[0] as { data: Record<string, unknown> };
+    expect(createArgs.data.status).toBe(RESERVATION_STATUS.CONFIRMED);
+    expect(createArgs.data.source).toBe("instagram");
+    expect(createArgs.data.confirmedAt).toBeInstanceOf(Date);
+    expect(createArgs.data.confirmedById).toBe("admin-1");
+    expect(mocks.sendReservationConfirmationEmail).not.toHaveBeenCalled();
+  });
+
+  it("rechaza orígenes no permitidos y no crea la reserva", async () => {
+    const { createManualReservationAction } = await import("@/app/actions");
+
+    await expect(createManualReservationAction(buildManualFormData({ source: "telegram" }))).rejects.toThrow(
+      "redirect:/admin/reservations/new?error=invalid-data",
+    );
+
+    expect(mocks.userUpsert).not.toHaveBeenCalled();
     expect(mocks.reservationCreate).not.toHaveBeenCalled();
   });
 });

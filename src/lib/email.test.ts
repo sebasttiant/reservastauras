@@ -128,6 +128,44 @@ describe("sendReservationConfirmationEmail", () => {
     expect(html).not.toContain("<script>alert");
   });
 
+  it("escapes HTML in the area / sector value", async () => {
+    const { sendReservationConfirmationEmail } = await import("@/lib/email");
+    await sendReservationConfirmationEmail({
+      to: "client@tauras.test",
+      name: "Cliente",
+      reservationDate: FIXED_DATE,
+      reservationTime: "20:00",
+      area: '<img src=x onerror="alert(1)">',
+      confirmedByName: "Admin",
+      confirmedByEmail: "admin@tauras.test",
+      language: "es",
+    });
+
+    const html = lastSentMail().html ?? "";
+    expect(html).toContain("&lt;img");
+    expect(html).not.toContain('<img src=x onerror="alert(1)">');
+  });
+
+  it("escapes HTML in confirmedByName and confirmedByEmail", async () => {
+    const { sendReservationConfirmationEmail } = await import("@/lib/email");
+    await sendReservationConfirmationEmail({
+      to: "client@tauras.test",
+      name: "Cliente",
+      reservationDate: FIXED_DATE,
+      reservationTime: "20:00",
+      area: "Patio",
+      confirmedByName: '<script>alert("name")</script>',
+      confirmedByEmail: '"><img src=x>',
+      language: "es",
+    });
+
+    const html = lastSentMail().html ?? "";
+    expect(html).toContain("&lt;script&gt;");
+    expect(html).toContain("&quot;&gt;&lt;img");
+    expect(html).not.toContain('<script>alert("name")</script>');
+    expect(html).not.toContain('"><img src=x>');
+  });
+
   it("falls back to localized 'area to be assigned' when area is null", async () => {
     const { sendReservationConfirmationEmail } = await import("@/lib/email");
 
@@ -227,6 +265,23 @@ describe("sendReservationConfirmationEmail", () => {
 });
 
 describe("sendReservationRejectionEmail", () => {
+  it("escapes HTML in the staff-supplied reason", async () => {
+    const { sendReservationRejectionEmail } = await import("@/lib/email");
+    await sendReservationRejectionEmail({
+      to: "client@tauras.test",
+      name: "Cliente",
+      reservationDate: FIXED_DATE,
+      reservationTime: "20:00",
+      area: "Patio",
+      reason: '<script>alert("reason")</script>',
+      language: "es",
+    });
+
+    const html = lastSentMail().html ?? "";
+    expect(html).toContain("&lt;script&gt;");
+    expect(html).not.toContain('<script>alert("reason")</script>');
+  });
+
   it("uses English chrome but does NOT translate the staff-supplied reason", async () => {
     const { sendReservationRejectionEmail } = await import("@/lib/email");
     await sendReservationRejectionEmail({

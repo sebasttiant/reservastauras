@@ -1,6 +1,13 @@
 import type { NextConfig } from "next";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const isProd = process.env.NODE_ENV === "production";
+
+// Next/Turbopack detecta múltiples lockfiles (raíz del repo y otros proyectos
+// vecinos) y emite un warning sobre la raíz inferida. Anclamos `turbopack.root`
+// al directorio de este config para que la inferencia sea estable y silenciosa.
+const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 
 // `BEHIND_HTTPS=true` se activa SOLO cuando el sitio se sirve por HTTPS al
 // usuario final (TLS terminado en un proxy delante: Caddy, Traefik, Nginx,
@@ -85,6 +92,9 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   output: "standalone",
   typedRoutes: true,
+  turbopack: {
+    root: projectRoot,
+  },
   async headers() {
     return [
       {

@@ -58,10 +58,19 @@ export const RESERVATION_DETAIL_ERROR_MESSAGES = {
   "invalid-state-confirm": "La reserva no puede confirmarse desde su estado actual.",
   "invalid-state-reject": "La reserva no puede rechazarse.",
   "invalid-state-cancel": "La reserva no puede cancelarse desde su estado actual.",
+  "invalid-state-resend": "Solo se puede reenviar el email cuando la reserva está confirmada.",
   "concurrent-update": "No pudimos confirmar la reserva por una actualización concurrente. Intentá nuevamente.",
+  "email-resend-failed": "No pudimos reenviar el email. Revisá el detalle del error en la reserva.",
 } as const;
 
 export type ReservationDetailErrorKey = keyof typeof RESERVATION_DETAIL_ERROR_MESSAGES;
+
+export const MANUAL_RESERVATION_ERROR_MESSAGES = {
+  "invalid-request": "Solicitud inválida. Recargá la página e intentá nuevamente.",
+  "invalid-data": "Datos inválidos. Revisá el formulario.",
+} as const;
+
+export type ManualReservationErrorKey = keyof typeof MANUAL_RESERVATION_ERROR_MESSAGES;
 
 // Helper genérico: devuelve el mensaje si la key está en el diccionario,
 // `null` en caso contrario. Las páginas usan esto para evitar pintar texto

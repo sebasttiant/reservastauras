@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { cancelReservationAction, confirmReservationAction, rejectReservationAction } from "@/app/actions";
+import { cancelReservationAction, confirmReservationAction, rejectReservationAction, resendConfirmationEmailAction } from "@/app/actions";
 import { RESERVATION_STATUS } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { canTransitionReservation } from "@/lib/reservations/state";
@@ -17,6 +17,8 @@ interface ReservationDetailPageProps {
 
 const SUCCESS_MESSAGES: Record<string, string> = {
   confirmed: "Reserva confirmada. Si el email tuvo algún problema, lo vas a ver debajo.",
+  "manual-created": "Reserva cargada manualmente. No se envió email automático.",
+  "email-resent": "Email de confirmación reenviado al cliente.",
   rejected: "Reserva rechazada correctamente.",
   cancelled: "Reserva cancelada correctamente.",
 };
@@ -33,6 +35,17 @@ const CUSTOMER_LANGUAGE_LABELS: Record<PublicLanguage, string> = {
   en: "Inglés",
 };
 
+const RESERVATION_SOURCE_LABELS: Record<string, string> = {
+  web: "Web",
+  whatsapp: "WhatsApp",
+  llamada: "Llamada",
+  instagram: "Instagram",
+  facebook: "Facebook",
+  crm: "CRM",
+  presencial: "Presencial",
+  otro: "Otro",
+};
+
 export const dynamic = "force-dynamic";
 
 export default async function ReservationDetailPage({ params, searchParams }: ReservationDetailPageProps) {
@@ -41,7 +54,7 @@ export default async function ReservationDetailPage({ params, searchParams }: Re
   const query = await searchParams;
   const reservation = await prisma.reservation.findUnique({
     where: { id },
-    include: { user: true, confirmedBy: true },
+    include: { user: true, confirmedBy: true, createdByAdmin: true },
   });
 
   if (!reservation) notFound();
@@ -74,7 +87,12 @@ export default async function ReservationDetailPage({ params, searchParams }: Re
     && reservation.status !== RESERVATION_STATUS.REJECTED;
   const canCancel = canTransitionReservation(reservation.status, RESERVATION_STATUS.CANCELLED)
     && reservation.status !== RESERVATION_STATUS.CANCELLED;
-  const hasActions = canConfirm || canReject || canCancel;
+  // Reenvío disponible solo cuando la reserva ya está confirmada. Cubre dos
+  // casos: (a) reservas manuales nacidas como "Confirmada sin email automático"
+  // que necesitan mandar el mail después; (b) confirmaciones donde el envío
+  // inicial falló y quedó `emailError`.
+  const canResendConfirmationEmail = reservation.status === RESERVATION_STATUS.CONFIRMED;
+  const hasActions = canConfirm || canReject || canCancel || canResendConfirmationEmail;
   const customerLanguage = parsePublicLanguage(reservation.customerLanguage);
 
   return (
@@ -103,9 +121,11 @@ export default async function ReservationDetailPage({ params, searchParams }: Re
         <dl className="grid two">
           <div><dt>Estado</dt><dd>{STATUS_LABELS[reservation.status]}</dd></div>
           <div><dt>Personas</dt><dd>{reservation.partySize}</dd></div>
+          <div><dt>Origen</dt><dd>{RESERVATION_SOURCE_LABELS[reservation.source] ?? reservation.source}</dd></div>
           <div><dt>Idioma del cliente</dt><dd>{CUSTOMER_LANGUAGE_LABELS[customerLanguage]}</dd></div>
           <div><dt>Email</dt><dd>{reservation.user.email}</dd></div>
           <div><dt>Teléfono</dt><dd>{reservation.user.phone ?? "-"}</dd></div>
+          <div><dt>Cargada por</dt><dd>{reservation.createdByAdmin?.email ?? "-"}</dd></div>
           <div><dt>Confirmada por</dt><dd>{reservation.confirmedBy?.email ?? "-"}</dd></div>
           <div><dt>Notas</dt><dd>{reservation.notes ?? "-"}</dd></div>
         </dl>
@@ -116,6 +136,14 @@ export default async function ReservationDetailPage({ params, searchParams }: Re
               <form action={confirmReservationAction}>
                 <input type="hidden" name="reservationId" value={reservation.id} />
                 <button type="submit">Confirmar y enviar email</button>
+              </form>
+            ) : null}
+            {canResendConfirmationEmail ? (
+              <form action={resendConfirmationEmailAction}>
+                <input type="hidden" name="reservationId" value={reservation.id} />
+                <button className="secondary" type="submit">
+                  {reservation.emailError ? "Reintentar email de confirmación" : "Reenviar email de confirmación"}
+                </button>
               </form>
             ) : null}
             {canReject ? (
