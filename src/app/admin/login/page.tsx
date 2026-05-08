@@ -23,7 +23,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         <form action={loginAction} className="grid">
           <label>Email<input name="email" type="email" required placeholder="admin@tauras.com" /></label>
           <label>Contraseña<input name="password" type="password" required minLength={8} placeholder="Tu contraseña segura" /></label>
-          <button type="submit">Entrar al dashboard</button>
+          <button type="submit">Iniciar sesión</button>
         </form>
       </section>
     </main>

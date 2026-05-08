@@ -9,6 +9,7 @@ import {
   EXPORT_DEFAULT_LIMIT,
   buildReservationWhere,
   parseExportFilters,
+  summarizeFilters,
 } from "@/lib/reservations/export-filters";
 import { getRequestSecurityContext } from "@/lib/security/request";
 import ExcelJS from "exceljs";
@@ -66,6 +67,15 @@ export async function GET(request: Request) {
     take: effectiveLimit + 1,
   });
 
+  const auditFilters = {
+    from: filters.from?.toISOString().slice(0, 10),
+    to: filters.to?.toISOString().slice(0, 10),
+    date: filters.date?.toISOString().slice(0, 10),
+    status: filters.status,
+    q: filters.q,
+    limit: effectiveLimit,
+  };
+
   if (reservations.length > effectiveLimit) {
     await recordAuditLog({
       event: AUDIT_EVENT.RESERVATIONS_EXPORTED,
@@ -77,12 +87,7 @@ export async function GET(request: Request) {
         count: reservations.length,
         blocked: true,
         reason: "limit-exceeded",
-        filters: {
-          from: filters.from?.toISOString().slice(0, 10),
-          to: filters.to?.toISOString().slice(0, 10),
-          status: filters.status,
-          limit: effectiveLimit,
-        },
+        filters: auditFilters,
       },
     });
 
@@ -122,13 +127,16 @@ export async function GET(request: Request) {
     metadata: {
       format,
       count: reservations.length,
-      filters: {
-        from: filters.from?.toISOString().slice(0, 10),
-        to: filters.to?.toISOString().slice(0, 10),
-        status: filters.status,
-        limit: effectiveLimit,
-      },
+      filters: auditFilters,
     },
+  });
+
+  const summaryRows = summarizeFilters(filters);
+  const issuedAt = new Date();
+  const issuedAtLong = issuedAt.toLocaleDateString("es-AR", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
   });
 
   if (format === "json") {
@@ -139,6 +147,23 @@ export async function GET(request: Request) {
 
   if (format === "xlsx") {
     const workbook = new ExcelJS.Workbook();
+
+    // Hoja "Resumen" antes de "Reservas". El usuario que abre el archivo
+    // aterriza en la primera hoja y entiende qué reporte está mirando sin
+    // tener que reconstruir los filtros desde el listado.
+    const summarySheet = workbook.addWorksheet("Resumen");
+    summarySheet.columns = [
+      { header: "Campo", key: "label", width: 24 },
+      { header: "Valor", key: "value", width: 60 },
+    ];
+    summarySheet.addRow({ label: "Fecha de emisión", value: issuedAtLong });
+    summarySheet.addRow({ label: "Total exportado", value: reservations.length });
+    summarySheet.addRow({ label: "Generado por", value: admin.email });
+    for (const row of summaryRows) {
+      summarySheet.addRow({ label: row.label, value: row.value });
+    }
+    summarySheet.getRow(1).font = { bold: true };
+
     const worksheet = workbook.addWorksheet("Reservas");
     worksheet.columns = Object.keys(data[0] ?? {}).map((key) => ({ header: key, key }));
     worksheet.addRows(data);
@@ -238,7 +263,7 @@ export async function GET(request: Request) {
     y -= 25;
 
     // Metadata
-    const dateStr = new Date().toLocaleDateString("es-AR", { day: "numeric", month: "long", year: "numeric" });
+    const dateStr = issuedAtLong;
     page.drawText(`Fecha de emisión: ${dateStr}`, {
       x: width / 2 - helvetica.widthOfTextAtSize(`Fecha de emisión: ${dateStr}`, 10) / 2,
       y,
@@ -247,14 +272,44 @@ export async function GET(request: Request) {
       color: grayColor,
     });
     y -= 15;
-    page.drawText(`Total de reservas registradas: ${reservations.length}`, {
-      x: width / 2 - helvetica.widthOfTextAtSize(`Total de reservas registradas: ${reservations.length}`, 10) / 2,
+    page.drawText(`Total exportado: ${reservations.length}`, {
+      x: width / 2 - helvetica.widthOfTextAtSize(`Total exportado: ${reservations.length}`, 10) / 2,
       y,
       size: 10,
       font: helvetica,
       color: grayColor,
     });
-    y -= 30;
+    y -= 22;
+
+    // Bloque de filtros aplicados. Se pinta como pares "Etiqueta: valor"
+    // separados por " · " en líneas centradas, y wrappea sin desbordar el
+    // ancho de la página si la búsqueda es larga.
+    const filterText = summaryRows.map((row) => `${row.label}: ${row.value}`).join("  ·  ");
+    const maxFilterWidth = width - 80;
+    const filterChunks: string[] = [];
+    let chunk = "";
+    for (const word of filterText.split(/\s+/)) {
+      const candidate = chunk ? `${chunk} ${word}` : word;
+      if (helvetica.widthOfTextAtSize(candidate, 9) > maxFilterWidth) {
+        if (chunk) filterChunks.push(chunk);
+        chunk = word;
+      } else {
+        chunk = candidate;
+      }
+    }
+    if (chunk) filterChunks.push(chunk);
+
+    for (const line of filterChunks) {
+      page.drawText(line, {
+        x: width / 2 - helvetica.widthOfTextAtSize(line, 9) / 2,
+        y,
+        size: 9,
+        font: helvetica,
+        color: grayColor,
+      });
+      y -= 13;
+    }
+    y -= 12;
 
     // Divider line
     page.drawLine({
