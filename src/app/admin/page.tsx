@@ -60,6 +60,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           <p className="muted">Gestioná reservas con criterio humano y trazabilidad.</p>
         </div>
         <div className="actions">
+          <Link className="button" href="/admin/reservations/new">Nueva reserva</Link>
           {admin.role === ADMIN_ROLE.SUPER_ADMIN ? (
             <>
               <Link className="button" href="/api/export?format=xlsx">Exportar Excel</Link>

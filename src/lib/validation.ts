@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ADMIN_ROLE } from "@/lib/constants";
+import { ADMIN_ROLE, RESERVATION_SOURCE_VALUES, RESERVATION_STATUS } from "@/lib/constants";
 import { DEFAULT_PUBLIC_LANGUAGE, publicLanguageSchema } from "@/lib/i18n/language";
 
 // Zona horaria del negocio. Las reglas calendario (hoy/ayer/futuro) se
@@ -81,6 +81,26 @@ export const createAdminSchema = z.object({
   role: z.enum([ADMIN_ROLE.SUPER_ADMIN, ADMIN_ROLE.ADMIN], { error: "Rol inválido." }),
 });
 
+export const manualReservationSchema = z.object({
+  name: z.string().trim().min(2, { error: "Ingresá el nombre del cliente." }).max(120),
+  email: z.email({ error: "Email inválido." }).transform((value) => value.toLowerCase()),
+  phone: phoneSchema,
+  reservationDate: dateOnlySchema,
+  reservationTime: timeSchema,
+  area: z.string().trim().max(80).optional(),
+  partySize: z.coerce
+    .number({ error: "Indicá cuántas personas." })
+    .int({ error: "La cantidad de personas debe ser entera." })
+    .min(1, { error: "Mínimo 1 persona." })
+    .max(30, { error: "Máximo 30 personas." }),
+  source: z.enum(RESERVATION_SOURCE_VALUES, { error: "Origen inválido." }),
+  status: z.enum([RESERVATION_STATUS.PENDING, RESERVATION_STATUS.CONFIRMED], {
+    error: "Estado inicial inválido.",
+  }),
+  notes: z.string().trim().max(500).optional(),
+  customerLanguage: publicLanguageSchema.default(DEFAULT_PUBLIC_LANGUAGE),
+});
+
 export const toggleAdminSchema = z.object({
   adminId: z.string().min(1),
 });
@@ -88,6 +108,7 @@ export const toggleAdminSchema = z.object({
 export type ReservationRequestInput = z.infer<typeof reservationRequestSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type CreateAdminInput = z.infer<typeof createAdminSchema>;
+export type ManualReservationInput = z.infer<typeof manualReservationSchema>;
 
 export function formDataToRecord(formData: FormData): Record<string, string> {
   return Object.fromEntries(

@@ -15,7 +15,7 @@ import {
   type PublicLanguage,
 } from "@/lib/i18n/language";
 import { canTransitionReservation } from "@/lib/reservations/state";
-import { createAdminSchema, formDataToRecord, loginSchema, reservationRequestSchema, toggleAdminSchema } from "@/lib/validation";
+import { createAdminSchema, formDataToRecord, loginSchema, manualReservationSchema, reservationRequestSchema, toggleAdminSchema } from "@/lib/validation";
 import { requireAdmin, requireSuperAdmin, signInAdmin, signOutAdmin } from "@/lib/auth";
 import { getClientIp } from "@/lib/auth/client-ip";
 import { checkLoginAllowed, normalizeEmailKey, recordLoginAttempt } from "@/lib/auth/rate-limit";
@@ -205,6 +205,50 @@ export async function createAdminAction(formData: FormData): Promise<void> {
   redirectWithSuccess("/admin/users", "admin-created");
 }
 
+export async function createManualReservationAction(formData: FormData): Promise<void> {
+  const admin = await requireAdmin();
+  const requestHeaders = await requireValidAdminMutationRequest("/admin/reservations/new");
+  const parsed = manualReservationSchema.safeParse(formDataToRecord(formData));
+  if (!parsed.success) redirectWithError("/admin/reservations/new", "invalid-data");
+
+  const input = parsed.data;
+  const user = await prisma.user.upsert({
+    where: { email: input.email },
+    update: { name: input.name, phone: normalizeOptionalText(input.phone) },
+    create: { email: input.email, name: input.name, phone: normalizeOptionalText(input.phone) },
+  });
+
+  const isConfirmed = input.status === RESERVATION_STATUS.CONFIRMED;
+  const reservation = await prisma.reservation.create({
+    data: {
+      userId: user.id,
+      reservationDate: toDateOnly(input.reservationDate),
+      reservationTime: input.reservationTime,
+      area: normalizeOptionalText(input.area),
+      partySize: input.partySize,
+      notes: normalizeOptionalText(input.notes),
+      status: input.status,
+      customerLanguage: input.customerLanguage,
+      source: input.source,
+      createdByAdminId: admin.adminId,
+      ...(isConfirmed ? { confirmedAt: new Date(), confirmedById: admin.adminId } : {}),
+    },
+    select: { id: true },
+  });
+
+  await recordAuditLog({
+    event: AUDIT_EVENT.RESERVATION_MANUAL_CREATED,
+    actor: admin,
+    request: getRequestSecurityContext(requestHeaders),
+    resourceType: "RESERVATION",
+    resourceId: reservation.id,
+    metadata: { source: input.source, status: input.status },
+  });
+
+  revalidatePath("/admin");
+  redirectWithSuccess(`/admin/reservations/${reservation.id}`, "manual-created");
+}
+
 export async function toggleAdminActiveAction(formData: FormData): Promise<void> {
   const currentAdmin = await requireSuperAdmin();
   const requestHeaders = await requireValidAdminMutationRequest("/admin/users");
@@ -328,6 +372,104 @@ export async function confirmReservationAction(formData: FormData): Promise<void
   revalidatePath("/admin");
   revalidatePath(`/admin/reservations/${reservationId}`);
   redirectWithSuccess(`/admin/reservations/${reservationId}`, "confirmed");
+}
+
+// Reenvío de email de confirmación.
+//
+// Caso de uso: una reserva ya está en estado CONFIRMED (típicamente porque se
+// cargó manualmente como "Confirmada sin email automático", o porque el envío
+// inicial falló y quedó `emailError`) y el admin quiere mandarle al cliente
+// el email canónico de confirmación.
+//
+// Reglas:
+// - SOLO opera sobre reservas con `status === CONFIRMED`. No es un atajo para
+//   confirmar reservas pendientes (ese flujo sigue siendo `confirmReservationAction`).
+// - El "Confirmado por" del email refleja al admin que originalmente confirmó
+//   la reserva (`confirmedBy`); si no existe (ej: reserva manual confirmada y
+//   ese admin fue dado de baja, dejando `confirmedById` en NULL por la FK
+//   ON DELETE SET NULL), usamos al admin actual como responsable visible.
+// - Si SMTP falla, NO tocamos `status`: solo persistimos `emailError` y
+//   redirigimos con error. El admin puede reintentar.
+// - Auditamos siempre: éxito (`outcome=SUCCESS`) y fallo (`outcome=FAILURE`)
+//   quedan en `AuditLog` con el evento `RESERVATION_CONFIRMATION_EMAIL_RESENT`.
+export async function resendConfirmationEmailAction(formData: FormData): Promise<void> {
+  const admin = await requireAdmin();
+  const requestHeaders = await requireValidAdminMutationRequest("/admin");
+  const reservationId = String(formData.get("reservationId") ?? "");
+  if (!reservationId) redirectWithError("/admin", "invalid-reservation");
+
+  const reservation = await prisma.reservation.findUnique({
+    where: { id: reservationId },
+    include: { user: true, confirmedBy: true },
+  });
+
+  if (!reservation) {
+    redirectWithError(`/admin/reservations/${reservationId}`, "not-found");
+  }
+
+  if (reservation.status !== RESERVATION_STATUS.CONFIRMED) {
+    redirectWithError(`/admin/reservations/${reservationId}`, "invalid-state-resend");
+  }
+
+  // Si la reserva fue confirmada por un admin que ya no existe (FK ON DELETE
+  // SET NULL), `confirmedBy` viene null. Caemos al admin actual: el cliente
+  // necesita ver SIEMPRE un nombre/email de responsable, no un campo vacío.
+  const responsibleName = reservation.confirmedBy?.name ?? admin.name;
+  const responsibleEmail = reservation.confirmedBy?.email ?? admin.email;
+
+  const securityContext = getRequestSecurityContext(requestHeaders);
+
+  try {
+    await sendReservationConfirmationEmail({
+      to: reservation.user.email,
+      name: reservation.user.name,
+      reservationDate: reservation.reservationDate,
+      reservationTime: reservation.reservationTime,
+      area: reservation.area,
+      confirmedByName: responsibleName,
+      confirmedByEmail: responsibleEmail,
+      language: parsePublicLanguage(reservation.customerLanguage),
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error desconocido al enviar email.";
+    // No tocamos `status`: la reserva sigue confirmada. Solo persistimos el
+    // error de email para que el admin pueda diagnosticar y reintentar.
+    await prisma.reservation.update({
+      where: { id: reservation.id },
+      data: { emailError: message },
+    });
+    await recordAuditLog({
+      event: AUDIT_EVENT.RESERVATION_CONFIRMATION_EMAIL_RESENT,
+      actor: admin,
+      request: securityContext,
+      resourceType: "RESERVATION",
+      resourceId: reservation.id,
+      outcome: "FAILURE",
+      metadata: { error: message },
+    });
+    revalidatePath(`/admin/reservations/${reservationId}`);
+    redirectWithError(`/admin/reservations/${reservationId}`, "email-resend-failed");
+  }
+
+  // Éxito: limpiamos `emailError` para que el indicador de error en el detalle
+  // no quede pegado de un envío anterior.
+  await prisma.reservation.update({
+    where: { id: reservation.id },
+    data: { emailError: null },
+  });
+
+  await recordAuditLog({
+    event: AUDIT_EVENT.RESERVATION_CONFIRMATION_EMAIL_RESENT,
+    actor: admin,
+    request: securityContext,
+    resourceType: "RESERVATION",
+    resourceId: reservation.id,
+    metadata: { responsibleAdminId: reservation.confirmedById ?? admin.adminId },
+  });
+
+  revalidatePath("/admin");
+  revalidatePath(`/admin/reservations/${reservationId}`);
+  redirectWithSuccess(`/admin/reservations/${reservationId}`, "email-resent");
 }
 
 export async function rejectReservationAction(formData: FormData): Promise<void> {

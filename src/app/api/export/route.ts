@@ -4,6 +4,12 @@ import path from "node:path";
 import { requireSuperAdmin } from "@/lib/auth";
 import { AUDIT_EVENT, recordAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/db";
+import { wrapText } from "@/lib/pdf/wrap";
+import {
+  EXPORT_DEFAULT_LIMIT,
+  buildReservationWhere,
+  parseExportFilters,
+} from "@/lib/reservations/export-filters";
 import { getRequestSecurityContext } from "@/lib/security/request";
 import ExcelJS from "exceljs";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
@@ -23,49 +29,68 @@ function formatDateTime(value: Date | null): string {
   });
 }
 
-function splitTextByLength(text: string, maxLength: number): string[] {
-  if (text.length <= maxLength) return [text];
+function formatReservationSource(source: string): string {
+  const labels: Record<string, string> = {
+    web: "Web",
+    whatsapp: "WhatsApp",
+    llamada: "Llamada",
+    instagram: "Instagram",
+    facebook: "Facebook",
+    crm: "CRM",
+    presencial: "Presencial",
+    otro: "Otro",
+  };
 
-  const words = text.split(" ");
-  const lines: string[] = [];
-  let current = "";
-
-  for (const word of words) {
-    const next = current ? `${current} ${word}` : word;
-    if (next.length > maxLength) {
-      if (current) lines.push(current);
-      current = word;
-    } else {
-      current = next;
-    }
-  }
-
-  if (current) lines.push(current);
-  return lines;
-}
-
-// Respeta saltos de línea explícitos (\n) ANTES de wrappear por largo.
-// `notes` viene de buildReservationNotes con `\n` entre Motivo/País/Especificaciones,
-// y splitTextByLength por sí solo no los detecta — los pinta con \n adentro y el
-// alto calculado queda corto, sacando contenido fuera del marco.
-function wrapText(text: string, maxLength: number): string[] {
-  return text.split("\n").flatMap((line) => splitTextByLength(line, maxLength));
+  return labels[source] ?? source;
 }
 
 export async function GET(request: Request) {
   const admin = await requireSuperAdmin();
 
   const { searchParams } = new URL(request.url);
-  const format = searchParams.get("format") || "xlsx";
-
-  if (format !== "json" && format !== "xlsx" && format !== "pdf") {
-    return new NextResponse("Formato no válido", { status: 400 });
+  const parsed = parseExportFilters(searchParams);
+  if (!parsed.ok || !parsed.data) {
+    return new NextResponse(parsed.error ?? "Filtros inválidos", { status: 400 });
   }
+  const filters = parsed.data;
+  const format = filters.format;
+  const effectiveLimit = filters.limit ?? EXPORT_DEFAULT_LIMIT;
 
+  // Pedimos `effectiveLimit + 1` para detectar si la consulta supera el tope
+  // sin pagar un `count()` aparte. Si lo supera, devolvemos 413 con un mensaje
+  // accionable (el cliente tiene que filtrar por fecha/estado o subir `limit`).
   const reservations = await prisma.reservation.findMany({
+    where: buildReservationWhere(filters),
     orderBy: [{ reservationDate: "desc" }, { reservationTime: "desc" }, { createdAt: "desc" }],
-    include: { user: true, confirmedBy: true },
+    include: { user: true, confirmedBy: true, createdByAdmin: true },
+    take: effectiveLimit + 1,
   });
+
+  if (reservations.length > effectiveLimit) {
+    await recordAuditLog({
+      event: AUDIT_EVENT.RESERVATIONS_EXPORTED,
+      actor: admin,
+      request: getRequestSecurityContext(request.headers),
+      resourceType: "RESERVATION_EXPORT",
+      metadata: {
+        format,
+        count: reservations.length,
+        blocked: true,
+        reason: "limit-exceeded",
+        filters: {
+          from: filters.from?.toISOString().slice(0, 10),
+          to: filters.to?.toISOString().slice(0, 10),
+          status: filters.status,
+          limit: effectiveLimit,
+        },
+      },
+    });
+
+    return new NextResponse(
+      `Demasiadas reservas para exportar (más de ${effectiveLimit}). Filtrá por fecha/estado o subí el parámetro 'limit'.`,
+      { status: 413 },
+    );
+  }
 
   const data = reservations.map((r) => ({
     ID: r.id,
@@ -75,9 +100,11 @@ export async function GET(request: Request) {
     Email: r.user.email,
     Teléfono: r.user.phone ?? "",
     Área: r.area ?? "Sin área",
+    Origen: formatReservationSource(r.source),
     Personas: r.partySize,
     Estado: r.status,
     "Creada en": formatDateTime(r.createdAt),
+    "Cargada por": r.createdByAdmin ? `${r.createdByAdmin.name} <${r.createdByAdmin.email}>` : "Web / cliente",
     "Actualizada en": formatDateTime(r.updatedAt),
     "Confirmada en": formatDateTime(r.confirmedAt),
     "Rechazada en": formatDateTime(r.rejectedAt),
@@ -92,7 +119,16 @@ export async function GET(request: Request) {
     actor: admin,
     request: getRequestSecurityContext(request.headers),
     resourceType: "RESERVATION_EXPORT",
-    metadata: { format, count: reservations.length },
+    metadata: {
+      format,
+      count: reservations.length,
+      filters: {
+        from: filters.from?.toISOString().slice(0, 10),
+        to: filters.to?.toISOString().slice(0, 10),
+        status: filters.status,
+        limit: effectiveLimit,
+      },
+    },
   });
 
   if (format === "json") {
@@ -326,7 +362,9 @@ export async function GET(request: Request) {
       const linesFecha = 1;
       const linesHora = 1;
       const linesArea = wrapText(row.Área, 40).length;
+      const linesOrigen = wrapText(row.Origen, 42).length;
       const linesCreada = 1;
+      const linesCargadaPor = wrapText(row["Cargada por"] || "-", 42).length;
       const linesConfirmado = wrapText(row["Confirmado por"] || "-", 95).length;
       const linesMov = wrapText(movementInfo, 95).length;
       const notesLines = wrapText(row.Notas || "-", 95);
@@ -337,7 +375,8 @@ export async function GET(request: Request) {
         rowSpace(Math.max(linesCliente, linesEmail)) +
         rowSpace(Math.max(linesTel, linesPersonas)) +
         rowSpace(Math.max(linesFecha, linesHora)) +
-        rowSpace(Math.max(linesArea, linesCreada));
+        rowSpace(Math.max(linesArea, linesOrigen)) +
+        rowSpace(Math.max(linesCreada, linesCargadaPor));
       const confirmedH = rowSpace(linesConfirmado);
       const movementsH = rowSpace(linesMov);
       const notesH = labelH + notesLines.length * lineH;
@@ -404,7 +443,11 @@ export async function GET(request: Request) {
       );
       drawPair(
         { label: "Área", value: row.Área, max: 40 },
-        { label: "Creada en", value: row["Creada en"], max: 42 },
+        { label: "Origen", value: row.Origen, max: 42 },
+      );
+      drawPair(
+        { label: "Creada en", value: row["Creada en"], max: 40 },
+        { label: "Cargada por", value: row["Cargada por"] || "-", max: 42 },
       );
 
       const linesC = drawField("Confirmado por", row["Confirmado por"] || "-", leftX, fieldY, 95);
