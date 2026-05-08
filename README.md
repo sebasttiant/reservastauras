@@ -16,15 +16,32 @@ Las versiones npm pedidas fueron verificadas con `npm view`. La verificación de
 ## Funcionalidad MVP
 
 - Formulario público que crea reservas `PENDING` con validación Zod.
+- Formulario público bilingüe ES/EN para clientes locales y extranjeros.
 - Login admin con bcrypt, JWT firmado y cookie `httpOnly`.
 - Middleware de protección para `/admin`.
 - Dashboard admin con histórico, filtros por estado, fecha, cliente/email/teléfono/zona, detalle, confirmación, rechazo y cancelación.
+- Carga manual de reservas desde admin para WhatsApp, llamada, Instagram, Facebook, CRM, presencial u otros canales.
+- Trazabilidad de origen y admin creador para reservas cargadas internamente.
 - Roles de administración: `SUPER_ADMIN` para usuarios/configuración y `ADMIN` para operación de reservas.
 - Confirmación revalida solapamiento, marca `confirmedAt` / `confirmedBy` y envía email.
+- Reenvío de email de confirmación desde el detalle cuando una reserva ya está `CONFIRMED`.
 - Si el email falla, la reserva queda `CONFIRMED` y se registra `emailError`.
+- Exportación JSON/XLSX/PDF con filtros por fecha/estado, límite anti-exports gigantes, auditoría y campos operativos como origen/cargada por.
 - Anti-solapamiento en backend y DB con índices únicos parciales PostgreSQL:
   - Si `area` existe: no permite dos `CONFIRMED` para misma fecha + hora + área.
   - Si `area` es `NULL`: no permite dos `CONFIRMED` para misma fecha + hora.
+
+## Roadmap comercial
+
+El roadmap de reservas está documentado en [`docs/reservations-roadmap.md`](docs/reservations-roadmap.md). El siguiente bloque funcional pendiente es la atribución para pauta paga:
+
+- rutas públicas por restaurante/marca (`/reservas/texmex`, `/reservas/steakhouse`, etc.),
+- páginas reales de gracias por marca (`/gracias/texmex`, etc.) para conversion tracking,
+- captura de UTMs y origen de campaña,
+- reportes/filtros por marca, origen y campaña,
+- definición previa de dominio, slugs oficiales y eventos de Google Ads.
+
+Regla del proyecto: las mejoras de seguridad no se “silencian”. Si Trivy, audit o CI fallan por una CVE o alerta real, se corrige la causa o se documenta una excepción técnica justificada; no se ocultan controles para pasar verde.
 
 ## Configuración
 
@@ -97,13 +114,15 @@ Sin una de esas confirmaciones, el comando falla y sólo imprime instrucciones.
 
 La migración inicial está en `prisma/migrations/000001_init/migration.sql`. Los índices parciales anti-solapamiento están hechos en SQL porque Prisma no expresa índices parciales PostgreSQL desde el schema de forma portable.
 
+La migración `000007_manual_reservations` agrega soporte deploy-safe para reservas manuales: `source`, `createdByAdminId`, backfill de reservas existentes como `web`, FK nullable con `ON DELETE SET NULL` e índices de consulta. En despliegue se aplica con `pnpm db:migrate`.
+
 ## Mantenimiento
 
 La guía de upgrades controlados, Docker-first y CI está en [`docs/maintenance.md`](docs/maintenance.md).
 
 ## Riesgos conocidos
 
-- No se ejecutó `next build` por restricción explícita.
+- Durante implementación local no se ejecuta `next build` por restricción explícita; CI sí valida build antes de merge.
 - SMTP sin configurar provoca fallo de email registrado en `Reservation.emailError`; esto es intencional para no revertir confirmaciones humanas.
 - El login usa credenciales propias con cookie JWT y roles internos. Para producción más compleja se puede migrar a Auth.js si aparecen OAuth o rotación avanzada.
 - La configuración SMTP se lee desde variables de entorno. El panel no permite editar password porque guardar secretos en DB requiere cifrado formal.
