@@ -86,17 +86,20 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Trivy filesystem scan
-        uses: aquasecurity/trivy-action@master
+      - name: Setup Trivy
+        uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514
         with:
-          scan-type: fs
-          scan-ref: .
-          format: sarif
-          output: trivy-fs.sarif
-          severity: HIGH,CRITICAL
-          trivyignores: .trivyignore
-          ignore-unfixed: true
-          exit-code: '1'
+          version: v0.70.0
+
+      - name: Trivy filesystem scan
+        run: >-
+          trivy fs .
+          --format sarif
+          --output trivy-fs.sarif
+          --severity HIGH,CRITICAL
+          --ignore-unfixed
+          --ignorefile .trivyignore
+          --exit-code 1
 
       - name: Upload Trivy filesystem SARIF
         if: always()
@@ -124,16 +127,20 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Trivy image scan
-        uses: aquasecurity/trivy-action@master
+      - name: Setup Trivy
+        uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514
         with:
-          image-ref: reservastauras:ci
-          format: sarif
-          output: trivy-image.sarif
-          severity: HIGH,CRITICAL
-          trivyignores: .trivyignore
-          ignore-unfixed: true
-          exit-code: '1'
+          version: v0.70.0
+
+      - name: Trivy image scan
+        run: >-
+          trivy image reservastauras:ci
+          --format sarif
+          --output trivy-image.sarif
+          --severity HIGH,CRITICAL
+          --ignore-unfixed
+          --ignorefile .trivyignore
+          --exit-code 1
 
       - name: Upload Trivy image SARIF
         if: always()
