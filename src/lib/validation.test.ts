@@ -111,11 +111,11 @@ describe("reservationRequestSchema (con reloj fijado a Bogotá borde-de-día)", 
   // Deploy-safety: el formulario público anterior NO enviaba `customerLanguage`,
   // y el rollout no debe romper esos requests; pero un valor explícito inválido
   // debe ser rechazado para no persistir basura.
-  it("acepta el campo customerLanguage ausente y lo defaultea a 'es'", () => {
+  it("acepta el campo customerLanguage ausente y lo defaultea a 'en'", () => {
     const result = reservationRequestSchema.safeParse({ ...baseInput, reservationDate: FAR_FUTURE });
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.customerLanguage).toBe("es");
+      expect(result.data.customerLanguage).toBe("en");
     }
   });
 
@@ -128,6 +128,18 @@ describe("reservationRequestSchema (con reloj fijado a Bogotá borde-de-día)", 
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.customerLanguage).toBe("en");
+    }
+  });
+
+  it("acepta customerLanguage='es' y lo preserva", () => {
+    const result = reservationRequestSchema.safeParse({
+      ...baseInput,
+      reservationDate: FAR_FUTURE,
+      customerLanguage: "es",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.customerLanguage).toBe("es");
     }
   });
 

@@ -4,13 +4,13 @@ import { z } from "zod";
 // El admin sigue siendo siempre español/internal: NO se agrega acá.
 export const PUBLIC_LANGUAGES = ["es", "en"] as const;
 
-export const DEFAULT_PUBLIC_LANGUAGE = "es" as const;
+export const DEFAULT_PUBLIC_LANGUAGE = "en" as const;
 
 export type PublicLanguage = (typeof PUBLIC_LANGUAGES)[number];
 
 // Parser para el `?lang=` que viene en la URL pública. La URL es un canal
 // controlado por el cliente: cualquier valor desconocido (incluyendo strings
-// vacíos, no-strings o idiomas como "fr") cae a `es` para que el render y
+// vacíos, no-strings o idiomas como "fr") cae a `en` para que el render y
 // los redirects nunca propaguen valores no soportados.
 export function parsePublicLanguage(value: unknown): PublicLanguage {
   if (typeof value !== "string") return DEFAULT_PUBLIC_LANGUAGE;

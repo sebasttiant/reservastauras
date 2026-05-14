@@ -36,10 +36,10 @@ describe("public reservation dictionary", () => {
     }
   });
 
-  it("returns Spanish copy by default/fallback and English copy for supported lang", () => {
+  it("returns English copy by default/fallback and Spanish copy for supported lang", () => {
     expect(getPublicReservationCopy("es").hero.title).toBe("Reserva tu mesa con tranquilidad");
     expect(getPublicReservationCopy("en").hero.title).toBe("Book your table with confidence");
-    expect(getPublicReservationCopy("foo").hero.title).toBe("Reserva tu mesa con tranquilidad");
+    expect(getPublicReservationCopy("foo").hero.title).toBe("Book your table with confidence");
   });
 
   it("localizes visible area/reason labels while keeping canonical option values", () => {
@@ -69,8 +69,8 @@ describe("public reservation dictionary", () => {
   });
 
   it("builds server-renderable language hrefs and never preserves unsupported lang values", () => {
-    expect(buildPublicLanguageHref("en")).toBe("/?lang=en");
-    expect(buildPublicLanguageHref("es")).toBe("/");
+    expect(buildPublicLanguageHref("en")).toBe("/");
+    expect(buildPublicLanguageHref("es")).toBe("/?lang=es");
     expect(buildPublicLanguageHref("foo")).toBe("/");
   });
 });

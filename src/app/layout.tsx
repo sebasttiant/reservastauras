@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="es">
+    <html lang="en">
       <head>
         <link rel="preload" as="image" href="/tauras-bg.webp" type="image/webp" />
       </head>

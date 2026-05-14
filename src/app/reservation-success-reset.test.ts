@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { buildReservationSuccessResetUrl } from "@/app/reservation-success-reset";
 
 describe("buildReservationSuccessResetUrl", () => {
-  it("cleans created=1 while preserving valid lang=en", () => {
-    expect(buildReservationSuccessResetUrl("https://tauras.test/?lang=en&created=1")).toBe("/?lang=en");
+  it("cleans created=1 while omitting default lang=en", () => {
+    expect(buildReservationSuccessResetUrl("https://tauras.test/?lang=en&created=1")).toBe("/");
   });
 
   it("cleans created=1 while preserving valid lang=es", () => {
