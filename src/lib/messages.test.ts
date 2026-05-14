@@ -22,9 +22,9 @@ describe("public messages", () => {
     );
   });
 
-  it("falls back visually to Spanish for unsupported public message languages", () => {
+  it("falls back visually to English for unsupported public message languages", () => {
     expect(lookupPublicMessage(PUBLIC_ERROR_MESSAGES, "rate-limited", "foo")).toBe(
-      "Demasiadas solicitudes desde tu conexión. Esperá un momento antes de volver a intentar.",
+      "Too many requests from your connection. Please wait a moment before trying again.",
     );
   });
 

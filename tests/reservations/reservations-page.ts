@@ -69,11 +69,15 @@ export class ReservationsPage extends BasePage {
   }
 
   async gotoSpanishDefault(): Promise<void> {
+    await this.goto("/?lang=es");
+  }
+
+  async gotoEnglishDefault(): Promise<void> {
     await this.goto("/");
   }
 
   async gotoEnglish(): Promise<void> {
-    await this.goto("/?lang=en");
+    await this.goto("/");
   }
 
   async switchToEnglish(): Promise<void> {
@@ -95,11 +99,11 @@ export class ReservationsPage extends BasePage {
   }
 
   async expectSpanishDefaultUrl(): Promise<void> {
-    await expect(this.page).toHaveURL(/\/$/);
+    await expect(this.page).toHaveURL(/\/\?lang=es$/);
   }
 
   async expectEnglishUrl(): Promise<void> {
-    await expect(this.page).toHaveURL(/\/?\?lang=en$/);
+    await expect(this.page).toHaveURL(/\/$/);
   }
 
   private async expectFormPresence(copy: ReservationCopy): Promise<void> {

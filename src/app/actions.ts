@@ -54,7 +54,7 @@ function redirectWithSuccess(path: string, key: string): never {
 // Construye el redirect público preservando SOLO un `lang` ya saneado.
 // Cualquier valor inválido del cliente ya fue normalizado a `DEFAULT_PUBLIC_LANGUAGE`
 // por `parsePublicLanguage`. Acá decidimos además omitir `lang` cuando es el
-// idioma por defecto (es), para no ensuciar URLs ni caches con un valor implícito.
+// idioma por defecto (en), para no ensuciar URLs ni caches con un valor implícito.
 function buildPublicRedirect(language: PublicLanguage, params: Record<string, string>): string {
   const query = new URLSearchParams(params);
   if (language !== DEFAULT_PUBLIC_LANGUAGE) {

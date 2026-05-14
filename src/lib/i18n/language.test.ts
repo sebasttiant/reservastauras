@@ -12,14 +12,15 @@ describe("parsePublicLanguage (query/URL — fallback friendly)", () => {
   });
 
   it("cae al default si el valor está ausente", () => {
+    expect(DEFAULT_PUBLIC_LANGUAGE).toBe("en");
     expect(parsePublicLanguage(undefined)).toBe(DEFAULT_PUBLIC_LANGUAGE);
     expect(parsePublicLanguage(null)).toBe(DEFAULT_PUBLIC_LANGUAGE);
   });
 
   it("cae al default si el valor no es un idioma soportado", () => {
-    expect(parsePublicLanguage("fr")).toBe(DEFAULT_PUBLIC_LANGUAGE);
-    expect(parsePublicLanguage("foo")).toBe(DEFAULT_PUBLIC_LANGUAGE);
-    expect(parsePublicLanguage("")).toBe(DEFAULT_PUBLIC_LANGUAGE);
+    expect(parsePublicLanguage("fr")).toBe("en");
+    expect(parsePublicLanguage("foo")).toBe("en");
+    expect(parsePublicLanguage("")).toBe("en");
   });
 
   it("cae al default si el valor no es siquiera un string", () => {

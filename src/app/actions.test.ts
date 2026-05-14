@@ -234,10 +234,10 @@ describe("confirmReservationAction", () => {
     expect(arg.language).toBe("en");
   });
 
-  it("defensively falls back to 'es' when customerLanguage is unsupported", async () => {
+  it("defensively falls back to 'en' when customerLanguage is unsupported", async () => {
     // Cinturón y tirantes: aunque el schema valida 'es'|'en' al persistir, una
     // fila vieja o un backfill podría tener cualquier string. El parser debe
-    // normalizar a 'es' antes de mandar el email.
+    // normalizar a 'en' antes de mandar el email.
     buildConfirmFixtures("fr");
     const formData = new FormData();
     formData.set("reservationId", "reservation-1");
@@ -249,7 +249,7 @@ describe("confirmReservationAction", () => {
 
     expect(mocks.sendReservationConfirmationEmail).toHaveBeenCalledOnce();
     const [arg] = mocks.sendReservationConfirmationEmail.mock.calls[0] as [{ language: string }];
-    expect(arg.language).toBe("es");
+    expect(arg.language).toBe("en");
   });
 });
 
@@ -389,6 +389,23 @@ describe("resendConfirmationEmailAction", () => {
     expect(arg.language).toBe("en");
   });
 
+  it("defensively falls back to 'en' when a resend reservation has unsupported customerLanguage", async () => {
+    mocks.reservationFindUnique.mockResolvedValue(
+      buildConfirmedReservation({ customerLanguage: "fr" }),
+    );
+
+    const formData = new FormData();
+    formData.set("reservationId", "reservation-resend-1");
+
+    const { resendConfirmationEmailAction } = await import("@/app/actions");
+    await expect(resendConfirmationEmailAction(formData)).rejects.toThrow(
+      "redirect:/admin/reservations/reservation-resend-1?ok=email-resent",
+    );
+
+    const [arg] = mocks.sendReservationConfirmationEmail.mock.calls[0] as [{ language: string }];
+    expect(arg.language).toBe("en");
+  });
+
   it("rejects reservations that are not CONFIRMED with invalid-state-resend", async () => {
     mocks.reservationFindUnique.mockResolvedValue(
       buildConfirmedReservation({ status: RESERVATION_STATUS.PENDING }),
@@ -507,6 +524,38 @@ describe("rejectReservationAction (bilingual email wiring)", () => {
     // El motivo del staff NUNCA se traduce: pasa raw al email.
     expect(arg.reason).toBe("El restaurante está cerrado por feriado");
   });
+
+  it("defensively falls back to 'en' when rejecting an unsupported reservation language", async () => {
+    mocks.reservationFindUnique.mockResolvedValue({
+      id: "reservation-2",
+      userId: "user-2",
+      reservationDate: new Date("2026-06-10T00:00:00Z"),
+      reservationTime: "20:00",
+      area: "Patio",
+      partySize: 2,
+      notes: null,
+      status: RESERVATION_STATUS.PENDING,
+      customerLanguage: "fr",
+      user: {
+        id: "user-2",
+        name: "Client",
+        email: "client@tauras.test",
+        phone: null,
+      },
+    });
+    mocks.reservationUpdate.mockResolvedValue({ id: "reservation-2" });
+
+    const formData = new FormData();
+    formData.set("reservationId", "reservation-2");
+
+    const { rejectReservationAction } = await import("@/app/actions");
+    await expect(rejectReservationAction(formData)).rejects.toThrow(
+      "redirect:/admin/reservations/reservation-2?ok=rejected",
+    );
+
+    const [arg] = mocks.sendReservationRejectionEmail.mock.calls[0] as [{ language: string }];
+    expect(arg.language).toBe("en");
+  });
 });
 
 describe("cancelReservationAction (bilingual email wiring)", () => {
@@ -557,6 +606,38 @@ describe("cancelReservationAction (bilingual email wiring)", () => {
     );
 
     expect(mocks.sendReservationCancellationEmail).toHaveBeenCalledOnce();
+    const [arg] = mocks.sendReservationCancellationEmail.mock.calls[0] as [{ language: string }];
+    expect(arg.language).toBe("en");
+  });
+
+  it("defensively falls back to 'en' when cancelling an unsupported reservation language", async () => {
+    mocks.reservationFindUnique.mockResolvedValue({
+      id: "reservation-3",
+      userId: "user-3",
+      reservationDate: new Date("2026-06-10T00:00:00Z"),
+      reservationTime: "20:00",
+      area: "Patio",
+      partySize: 2,
+      notes: null,
+      status: RESERVATION_STATUS.PENDING,
+      customerLanguage: "fr",
+      user: {
+        id: "user-3",
+        name: "Client",
+        email: "client@tauras.test",
+        phone: null,
+      },
+    });
+    mocks.reservationUpdate.mockResolvedValue({ id: "reservation-3" });
+
+    const formData = new FormData();
+    formData.set("reservationId", "reservation-3");
+
+    const { cancelReservationAction } = await import("@/app/actions");
+    await expect(cancelReservationAction(formData)).rejects.toThrow(
+      "redirect:/admin/reservations/reservation-3?ok=cancelled",
+    );
+
     const [arg] = mocks.sendReservationCancellationEmail.mock.calls[0] as [{ language: string }];
     expect(arg.language).toBe("en");
   });
@@ -611,11 +692,11 @@ describe("createReservationAction (persistencia bilingüe + redirects saneados)"
     vi.useRealTimers();
   });
 
-  it("persiste customerLanguage='en' y redirige con `lang=en` cuando el cliente eligió inglés", async () => {
+  it("persiste customerLanguage='en' y redirige sin `lang` cuando el cliente eligió inglés default", async () => {
     const formData = buildFormData({ customerLanguage: "en", lang: "en" });
     const { createReservationAction } = await import("@/app/actions");
 
-    await expect(createReservationAction(formData)).rejects.toThrow("redirect:/?created=1&lang=en");
+    await expect(createReservationAction(formData)).rejects.toThrow("redirect:/?created=1");
 
     expect(mocks.reservationCreate).toHaveBeenCalledTimes(1);
     const createArgs = mocks.reservationCreate.mock.calls[0]?.[0] as { data: Record<string, unknown> };
@@ -628,14 +709,24 @@ describe("createReservationAction (persistencia bilingüe + redirects saneados)"
     expect(createArgs.data.area).toBe("Patio");
   });
 
-  it("acepta el formulario actual sin customerLanguage y persiste 'es' por default", async () => {
+  it("acepta el formulario actual sin customerLanguage y persiste 'en' por default", async () => {
     // Caso de compatibilidad: la persistencia se deploya antes que la UI bilingüe.
     // El formulario actual NO envía `customerLanguage`; ese request debe seguir
-    // funcionando y guardarse como español.
+    // funcionando y guardarse como inglés, que es el idioma público default.
     const formData = buildFormData();
     const { createReservationAction } = await import("@/app/actions");
 
     await expect(createReservationAction(formData)).rejects.toThrow("redirect:/?created=1");
+
+    const createArgs = mocks.reservationCreate.mock.calls[0]?.[0] as { data: Record<string, unknown> };
+    expect(createArgs.data.customerLanguage).toBe("en");
+  });
+
+  it("preserva customerLanguage='es' y `lang=es` en el redirect de éxito", async () => {
+    const formData = buildFormData({ customerLanguage: "es", lang: "es" });
+    const { createReservationAction } = await import("@/app/actions");
+
+    await expect(createReservationAction(formData)).rejects.toThrow("redirect:/?created=1&lang=es");
 
     const createArgs = mocks.reservationCreate.mock.calls[0]?.[0] as { data: Record<string, unknown> };
     expect(createArgs.data.customerLanguage).toBe("es");
@@ -660,13 +751,21 @@ describe("createReservationAction (persistencia bilingüe + redirects saneados)"
     await expect(createReservationAction(formData)).rejects.toThrow("redirect:/?error=invalid-data");
   });
 
-  it("preserva `lang=en` en el redirect de error cuando el query es válido", async () => {
+  it("omite `lang=en` en el redirect de error porque inglés es el default", async () => {
     // Si el formulario público inglés mete datos inválidos, el usuario debe
     // volver al formulario inglés, no caer abruptamente al español.
     const formData = buildFormData({ customerLanguage: "en", lang: "en", phone: "abc" });
     const { createReservationAction } = await import("@/app/actions");
 
-    await expect(createReservationAction(formData)).rejects.toThrow("redirect:/?error=invalid-data&lang=en");
+    await expect(createReservationAction(formData)).rejects.toThrow("redirect:/?error=invalid-data");
+    expect(mocks.reservationCreate).not.toHaveBeenCalled();
+  });
+
+  it("preserva `lang=es` en el redirect de error cuando español fue seleccionado", async () => {
+    const formData = buildFormData({ customerLanguage: "es", lang: "es", phone: "abc" });
+    const { createReservationAction } = await import("@/app/actions");
+
+    await expect(createReservationAction(formData)).rejects.toThrow("redirect:/?error=invalid-data&lang=es");
     expect(mocks.reservationCreate).not.toHaveBeenCalled();
   });
 

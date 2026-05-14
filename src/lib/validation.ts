@@ -62,7 +62,7 @@ export const reservationRequestSchema = z.object({
   isAdult: checkboxSchema,
   dataConsent: checkboxSchema,
   // Deploy-safe: callers anteriores (formulario actual sin idioma) siguen
-  // funcionando porque el campo ausente cae al default `"es"`. Pero un valor
+  // funcionando porque el campo ausente cae al default `"en"`. Pero un valor
   // explícito no soportado (ej. `"foo"`) DEBE fallar para no persistir ni
   // “corregir” idiomas inválidos en silencio. El mensaje de Zod queda interno:
   // el cliente recibe la key opaca `invalid-data` desde la action, no este texto.
