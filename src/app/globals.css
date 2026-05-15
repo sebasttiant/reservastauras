@@ -150,34 +150,76 @@ label { display: grid; gap: 7px; min-width: 0; font-weight: 900; color: var(--fg
   display: grid;
   gap: 7px;
   min-width: 0;
-  position: relative;
 }
 
-.field-hint {
-  position: absolute;
-  inset: calc(100% + 8px) 0 auto;
-  z-index: 20;
+.label-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.info-btn {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
+  width: 24px;
+  height: 24px;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 50%;
+  transition: color .15s ease;
+  flex-shrink: 0;
+}
+
+.info-btn:hover,
+.info-btn:focus-visible {
+  color: var(--brand);
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.field-hint-inline {
   margin: 0;
-  border: 1px solid var(--border-strong);
-  border-radius: 12px;
-  padding: 10px 12px;
-  background: rgba(8, 6, 4, .96);
-  box-shadow: 0 14px 32px rgba(0, 0, 0, .42);
-  color: var(--fg);
-  font-size: .82rem;
-  font-weight: 800;
+  color: var(--muted);
+  font-size: .88rem;
+  font-weight: 400;
   line-height: 1.35;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-4px);
-  transition: opacity .16s ease, transform .16s ease, visibility .16s ease;
-  visibility: hidden;
 }
 
-.field-with-hint:focus-within .field-hint {
+.field-popover {
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 14px;
+  background: var(--card);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .48);
+  color: var(--fg);
+  font-size: .88rem;
+  font-weight: 400;
+  line-height: 1.45;
+  width: clamp(220px, 80vw, 320px);
+  opacity: 0;
+  transition: opacity .16s ease, display .16s ease allow-discrete;
+}
+
+.field-popover:popover-open {
   opacity: 1;
-  transform: translateY(0);
-  visibility: visible;
+}
+
+@starting-style {
+  .field-popover:popover-open {
+    opacity: 0;
+  }
+}
+
+@media (max-width: 780px) {
+  .field-popover {
+    width: clamp(200px, 90vw, 300px);
+    font-size: .84rem;
+  }
 }
 
 input, textarea, select {

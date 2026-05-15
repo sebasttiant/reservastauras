@@ -15,6 +15,9 @@ const RESERVATION_TIMES = [
   "00:00", "01:00",
 ] as const;
 
+const PARTY_SIZE_HINT_ID = "partySize-hint";
+const PARTY_SIZE_POPOVER_ID = "partySize-popover";
+
 interface PublicReservationPageProps {
   searchParams: Record<string, string | undefined>;
 }
@@ -67,8 +70,49 @@ export function PublicReservationPage({ searchParams }: PublicReservationPagePro
                   </select>
                 </label>
                 <div className="field-with-hint">
-                  <label>{copy.form.partySize}<input name="partySize" type="number" min={1} max={30} defaultValue={1} required aria-describedby="partySize-help" /></label>
-                  <p id="partySize-help" className="field-hint">{copy.form.partySizeHelp}</p>
+                  <div className="label-row">
+                    <label htmlFor="partySize">{copy.form.partySize}</label>
+                    <button
+                      type="button"
+                      className="info-btn"
+                      popoverTarget={PARTY_SIZE_POPOVER_ID}
+                      aria-label={copy.form.partySizeInfoLabel}
+                    >
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="16" x2="12" y2="12" />
+                        <line x1="12" y1="8" x2="12.01" y2="8" />
+                      </svg>
+                    </button>
+                  </div>
+                  <input
+                    id="partySize"
+                    name="partySize"
+                    type="number"
+                    min={1}
+                    max={30}
+                    defaultValue={1}
+                    required
+                    aria-describedby={PARTY_SIZE_HINT_ID}
+                  />
+                  <p id={PARTY_SIZE_HINT_ID} className="field-hint-inline">{copy.form.partySizeHint}</p>
+                  <div
+                    id={PARTY_SIZE_POPOVER_ID}
+                    popover="auto"
+                    className="field-popover"
+                  >
+                    {copy.form.partySizeHelp}
+                  </div>
                 </div>
                 <label>{copy.form.date}<input name="reservationDate" type="date" required /></label>
                 <label>{copy.form.time}
