@@ -66,7 +66,10 @@ export function PublicReservationPage({ searchParams }: PublicReservationPagePro
                     {copy.areaOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </select>
                 </label>
-                <label>{copy.form.partySize}<input name="partySize" type="number" min={1} max={30} defaultValue={1} required /></label>
+                <div className="field-with-hint">
+                  <label>{copy.form.partySize}<input name="partySize" type="number" min={1} max={30} defaultValue={1} required aria-describedby="partySize-help" /></label>
+                  <p id="partySize-help" className="field-hint">{copy.form.partySizeHelp}</p>
+                </div>
                 <label>{copy.form.date}<input name="reservationDate" type="date" required /></label>
                 <label>{copy.form.time}
                   <select name="reservationTime" required defaultValue="">

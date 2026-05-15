@@ -6,6 +6,7 @@ interface ReservationCopy {
   sectionName: string;
   areaLabel: string;
   partySizeLabel: string;
+  partySizeHelp: string;
   dateLabel: string;
   timeLabel: string;
   reasonLabel: string;
@@ -25,6 +26,7 @@ const RESERVATION_COPY = {
     sectionName: "Formulario de reserva Tauras Steakhouse",
     areaLabel: "Zona",
     partySizeLabel: "Cantidad de personas",
+    partySizeHelp: "Reservá por el total real de asistentes, incluyendo niños.",
     dateLabel: "Fecha",
     timeLabel: "Hora disponible",
     reasonLabel: "Motivo de la reserva",
@@ -42,6 +44,7 @@ const RESERVATION_COPY = {
     sectionName: "Tauras Steakhouse reservation form",
     areaLabel: "Area",
     partySizeLabel: "Number of guests",
+    partySizeHelp: "Book for the real total of guests, including children.",
     dateLabel: "Date",
     timeLabel: "Available time",
     reasonLabel: "Reservation reason",
@@ -109,6 +112,7 @@ export class ReservationsPage extends BasePage {
   private async expectFormPresence(copy: ReservationCopy): Promise<void> {
     await expect(this.page.getByRole("combobox", { name: copy.areaLabel, exact: true })).toBeVisible();
     await expect(this.page.getByRole("spinbutton", { name: copy.partySizeLabel, exact: true })).toBeVisible();
+    await expect(this.page.getByText(copy.partySizeHelp)).toBeVisible();
     await expect(this.page.getByRole("textbox", { name: copy.dateLabel, exact: true })).toBeVisible();
     await expect(this.page.getByRole("combobox", { name: copy.timeLabel, exact: true })).toBeVisible();
     await expect(this.page.getByRole("combobox", { name: copy.reasonLabel, exact: true })).toBeVisible();
