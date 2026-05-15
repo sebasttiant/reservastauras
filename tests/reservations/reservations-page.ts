@@ -111,7 +111,9 @@ export class ReservationsPage extends BasePage {
 
   private async expectFormPresence(copy: ReservationCopy): Promise<void> {
     await expect(this.page.getByRole("combobox", { name: copy.areaLabel, exact: true })).toBeVisible();
-    await expect(this.page.getByRole("spinbutton", { name: copy.partySizeLabel, exact: true })).toBeVisible();
+    const partySizeInput = this.page.getByRole("spinbutton", { name: copy.partySizeLabel, exact: true });
+    await expect(partySizeInput).toBeVisible();
+    await partySizeInput.focus();
     await expect(this.page.getByText(copy.partySizeHelp)).toBeVisible();
     await expect(this.page.getByRole("textbox", { name: copy.dateLabel, exact: true })).toBeVisible();
     await expect(this.page.getByRole("combobox", { name: copy.timeLabel, exact: true })).toBeVisible();
