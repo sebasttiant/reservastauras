@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import HomePage from "@/app/page";
+import { PublicReservationPage } from "@/app/public-reservation-page";
 
 vi.mock("@/app/actions", () => ({
   createReservationAction: vi.fn(),
@@ -10,8 +10,23 @@ vi.mock("@/app/reservation-success-reset", () => ({
   ReservationSuccessReset: () => null,
 }));
 
+const locationsMock = vi.hoisted(() => ({
+  getActiveReservationLocations: vi.fn(async () => [
+    {
+      id: "location-1",
+      slug: "tauras-default",
+      name: "TAURAS Steakhouse",
+      reservationLabel: "Main dining room",
+      logoPath: null,
+      heroImagePath: null,
+    },
+  ]),
+}));
+
+vi.mock("@/lib/reservations/locations", () => locationsMock);
+
 async function renderHomePage(searchParams: Record<string, string | undefined> = {}): Promise<string> {
-  const page = await HomePage({ searchParams: Promise.resolve(searchParams) });
+  const page = await PublicReservationPage({ searchParams });
   return renderToStaticMarkup(page);
 }
 
@@ -22,6 +37,9 @@ describe("HomePage public language rendering", () => {
     expect(html).toContain("Book your table with confidence");
     expect(html).toContain('name="customerLanguage"');
     expect(html).toContain('value="en"');
+    expect(html).toContain('name="locationSlug"');
+    expect(html).toContain('value="tauras-default"');
+    expect(html).toContain("required");
     expect(html).toContain('href="/"');
     expect(html).toContain('href="/?lang=es"');
     expect(html).not.toContain('name="lang"');
@@ -60,5 +78,15 @@ describe("HomePage public language rendering", () => {
     expect(html).toContain('value="en"');
     expect(html).not.toContain('name="lang"');
     expect(html).not.toContain('value="foo"');
+  });
+
+  it("does not render a submit-capable form when no active locations exist", async () => {
+    locationsMock.getActiveReservationLocations.mockResolvedValueOnce([]);
+
+    const html = await renderHomePage();
+
+    expect(html).toContain("Online reservations are currently unavailable");
+    expect(html).not.toContain('name="locationSlug"');
+    expect(html).not.toContain("Request reservation");
   });
 });

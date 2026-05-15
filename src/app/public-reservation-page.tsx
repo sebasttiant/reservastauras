@@ -1,4 +1,5 @@
 import { createReservationAction } from "@/app/actions";
+import { LocationSelector, type PublicLocation } from "@/app/location-selector";
 import { PartySizeField } from "@/app/party-size-field";
 import { ReservationSuccessReset } from "@/app/reservation-success-reset";
 import {
@@ -8,6 +9,7 @@ import {
 } from "@/lib/i18n/public-reservation-dictionary";
 import { parsePublicLanguage } from "@/lib/i18n/language";
 import { PUBLIC_ERROR_MESSAGES, lookupPublicMessage } from "@/lib/messages";
+import { getActiveReservationLocations } from "@/lib/reservations/locations";
 
 const RESERVATION_TIMES = [
   "11:00", "11:30", "12:00", "12:30", "13:00", "13:30", "14:00", "14:30",
@@ -20,10 +22,23 @@ interface PublicReservationPageProps {
   searchParams: Record<string, string | undefined>;
 }
 
-export function PublicReservationPage({ searchParams }: PublicReservationPageProps) {
+function toPublicLocations(rows: Awaited<ReturnType<typeof getActiveReservationLocations>>): readonly PublicLocation[] {
+  return rows.map((row) => ({
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    description: row.reservationLabel,
+    logoSrc: row.logoPath ?? undefined,
+    previewSrc: row.heroImagePath ?? undefined,
+  }));
+}
+
+export async function PublicReservationPage({ searchParams }: PublicReservationPageProps) {
   const publicLanguage = parsePublicLanguage(searchParams.lang);
   const copy = getPublicReservationCopy(publicLanguage);
   const errorMessage = lookupPublicMessage(PUBLIC_ERROR_MESSAGES, searchParams.error, publicLanguage);
+  const activeLocations = await getActiveReservationLocations();
+  const publicLocations = toPublicLocations(activeLocations);
 
   return (
     <>
@@ -58,11 +73,23 @@ export function PublicReservationPage({ searchParams }: PublicReservationPagePro
             ) : null}
             {errorMessage ? <p className="notice error">{errorMessage}</p> : null}
 
+            {publicLocations.length === 0 ? (
+              <p className="notice error">{copy.messages.unavailable}</p>
+            ) : (
             <form action={createReservationAction} className="grid">
               <input type="hidden" name="customerLanguage" value={publicLanguage} />
               {shouldRenderLanguageParam(publicLanguage) ? <input type="hidden" name="lang" value={publicLanguage} /> : null}
+              <LocationSelector
+                copy={copy.locations}
+                locations={publicLocations}
+                isDemo={false}
+              />
               <div className="grid two">
-                <label>{copy.form.area}
+                <label className="area-field" data-depends-on="location">
+                  <span className="label-row">
+                    {copy.form.area}
+                    <span className="area-field-hint">{copy.locations.areaHint}</span>
+                  </span>
                   <select name="area" defaultValue="Cualquier Mesa Disponible">
                     {copy.areaOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </select>
@@ -103,6 +130,7 @@ export function PublicReservationPage({ searchParams }: PublicReservationPagePro
               <button type="submit">{copy.form.submit}</button>
               <p className="form-note">{copy.form.note}</p>
             </form>
+            )}
           </section>
         </div>
       </main>

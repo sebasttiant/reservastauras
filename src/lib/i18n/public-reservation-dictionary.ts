@@ -52,6 +52,18 @@ interface PublicReservationLanguageCopy {
 
 interface PublicReservationMessagesCopy {
   created: string;
+  unavailable: string;
+}
+
+interface PublicReservationLocationsCopy {
+  kicker: string;
+  title: string;
+  description: string;
+  ariaLabel: string;
+  demoBadge: string;
+  previewAlt: string;
+  previewFallback: string;
+  areaHint: string;
 }
 
 export interface PublicReservationCopy {
@@ -61,6 +73,7 @@ export interface PublicReservationCopy {
   form: PublicReservationFormCopy;
   language: PublicReservationLanguageCopy;
   messages: PublicReservationMessagesCopy;
+  locations: PublicReservationLocationsCopy;
   areaOptions: readonly PublicOptionCopy[];
   reasonOptions: readonly PublicOptionCopy[];
   countries: readonly PublicOptionCopy[];
@@ -155,6 +168,17 @@ export const PUBLIC_RESERVATION_COPY: Record<PublicLanguage, PublicReservationCo
     },
     messages: {
       created: "Recibimos tu solicitud. En breve, una persona del equipo se comunicará contigo para confirmar disponibilidad.",
+      unavailable: "Las reservas en línea no están disponibles en este momento. Por favor contáctanos directamente para ayudarte.",
+    },
+    locations: {
+      kicker: "Sede",
+      title: "Elegí tu sede",
+      description: "Seleccioná dónde querés reservar. Mostraremos la disponibilidad y los ambientes de esa sede.",
+      ariaLabel: "Selección de sede",
+      demoBadge: "Demo",
+      previewAlt: "Vista previa de la sede seleccionada",
+      previewFallback: "Vista de la sede próximamente",
+      areaHint: "según sede",
     },
     areaOptions: buildOptions(AREA_VALUES, SPANISH_AREA_LABELS),
     reasonOptions: buildOptions(REASON_VALUES, SPANISH_REASON_LABELS),
@@ -206,6 +230,17 @@ export const PUBLIC_RESERVATION_COPY: Record<PublicLanguage, PublicReservationCo
     },
     messages: {
       created: "We received your request. Someone from our team will contact you shortly to confirm availability.",
+      unavailable: "Online reservations are currently unavailable. Please contact us directly so we can help you.",
+    },
+    locations: {
+      kicker: "Location",
+      title: "Choose your location",
+      description: "Pick where you want to dine. We will show that location’s availability and dining areas.",
+      ariaLabel: "Location selection",
+      demoBadge: "Demo",
+      previewAlt: "Preview of the selected location",
+      previewFallback: "Location preview coming soon",
+      areaHint: "by location",
     },
     areaOptions: buildOptions(AREA_VALUES, ENGLISH_AREA_LABELS),
     reasonOptions: buildOptions(REASON_VALUES, ENGLISH_REASON_LABELS),
