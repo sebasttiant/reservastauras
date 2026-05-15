@@ -46,8 +46,8 @@ export function PublicReservationPage({ searchParams }: PublicReservationPagePro
             </div>
 
             <nav className="hero-highlights" aria-label={copy.language.ariaLabel}>
-              <a href={buildPublicLanguageHref("es")}>{copy.language.es}</a>
               <a href={buildPublicLanguageHref("en")}>{copy.language.en}</a>
+              <a href={buildPublicLanguageHref("es")}>{copy.language.es}</a>
             </nav>
 
             {searchParams.created ? (
