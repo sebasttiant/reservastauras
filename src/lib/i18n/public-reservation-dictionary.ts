@@ -127,7 +127,8 @@ export const PUBLIC_RESERVATION_COPY: Record<PublicLanguage, PublicReservationCo
     form: {
       area: "Zona",
       partySize: "Cantidad de personas",
-      partySizeHelp: "Para preparar bien tu mesa, incluí niños y bebés en el total.",
+      partySizeHelp:
+        "Prepararemos tu mesa para la cantidad exacta de personas indicada. Incluí también niños y bebés en el total.",
       date: "Fecha",
       time: "Hora disponible",
       timePlaceholder: "Selecciona una hora",
@@ -177,7 +178,8 @@ export const PUBLIC_RESERVATION_COPY: Record<PublicLanguage, PublicReservationCo
     form: {
       area: "Area",
       partySize: "Number of guests",
-      partySizeHelp: "Include children and babies in the total so we can prepare the right table.",
+      partySizeHelp:
+        "We’ll prepare your table for the exact number of guests entered. Please include children and babies in the total.",
       date: "Date",
       time: "Available time",
       timePlaceholder: "Select a time",

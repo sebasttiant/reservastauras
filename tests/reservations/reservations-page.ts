@@ -26,7 +26,8 @@ const RESERVATION_COPY = {
     sectionName: "Formulario de reserva Tauras Steakhouse",
     areaLabel: "Zona",
     partySizeLabel: "Cantidad de personas",
-    partySizeHint: "Para preparar bien tu mesa, incluí niños y bebés en el total.",
+    partySizeHint:
+      "Prepararemos tu mesa para la cantidad exacta de personas indicada. Incluí también niños y bebés en el total.",
     dateLabel: "Fecha",
     timeLabel: "Hora disponible",
     reasonLabel: "Motivo de la reserva",
@@ -44,7 +45,8 @@ const RESERVATION_COPY = {
     sectionName: "Tauras Steakhouse reservation form",
     areaLabel: "Area",
     partySizeLabel: "Number of guests",
-    partySizeHint: "Include children and babies in the total so we can prepare the right table.",
+    partySizeHint:
+      "We’ll prepare your table for the exact number of guests entered. Please include children and babies in the total.",
     dateLabel: "Date",
     timeLabel: "Available time",
     reasonLabel: "Reservation reason",
@@ -98,6 +100,9 @@ export class ReservationsPage extends BasePage {
     await expect(this.page.getByRole("region", { name: copy.sectionName })).toBeVisible();
     await expect(this.spanishLink).toBeVisible();
     await expect(this.englishLink).toBeVisible();
+    await expect(
+      this.page.getByRole("navigation", { name: /Reservation form language|Idioma del formulario de reservas/ }),
+    ).toHaveText(/English\s*Español/);
     await this.expectFormPresence(copy);
   }
 
