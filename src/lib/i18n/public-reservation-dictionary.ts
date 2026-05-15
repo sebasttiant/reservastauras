@@ -23,6 +23,7 @@ interface PublicReservationSectionCopy {
 interface PublicReservationFormCopy {
   area: string;
   partySize: string;
+  partySizeHelp: string;
   date: string;
   time: string;
   timePlaceholder: string;
@@ -126,6 +127,7 @@ export const PUBLIC_RESERVATION_COPY: Record<PublicLanguage, PublicReservationCo
     form: {
       area: "Zona",
       partySize: "Cantidad de personas",
+      partySizeHelp: "Reservá por el total real de asistentes, incluyendo niños. Si el número cambia, avisanos antes de llegar.",
       date: "Fecha",
       time: "Hora disponible",
       timePlaceholder: "Selecciona una hora",
@@ -175,6 +177,7 @@ export const PUBLIC_RESERVATION_COPY: Record<PublicLanguage, PublicReservationCo
     form: {
       area: "Area",
       partySize: "Number of guests",
+      partySizeHelp: "Book for the real total of guests, including children. If the number changes, please let us know before arrival.",
       date: "Date",
       time: "Available time",
       timePlaceholder: "Select a time",

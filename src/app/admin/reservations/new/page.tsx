@@ -67,7 +67,10 @@ export default async function NewReservationPage({ searchParams }: NewReservatio
               </select>
             </label>
             <label>Área<input name="area" placeholder="Ej: Terraza, salón, cualquier mesa" /></label>
-            <label>Personas<input name="partySize" type="number" min={1} max={30} defaultValue={2} required /></label>
+            <div className="field-with-hint">
+              <label>Personas<input name="partySize" type="number" min={1} max={30} defaultValue={2} required aria-describedby="admin-partySize-help" /></label>
+              <p id="admin-partySize-help" className="field-hint">Ingresá el total real de asistentes, incluyendo niños.</p>
+            </div>
             <label>Nombre<input name="name" required minLength={2} placeholder="Nombre del cliente" /></label>
             <label>Email<input name="email" type="email" required placeholder="cliente@email.com" /></label>
             <label>Teléfono<input name="phone" inputMode="tel" pattern="[0-9+()\s-]{7,25}" required placeholder="+57 300 123 4567" /></label>
