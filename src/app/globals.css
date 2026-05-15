@@ -286,6 +286,85 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   opacity: 1;
 }
 
+.party-size-field {
+  position: relative;
+}
+
+.party-size-alert {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  right: 0;
+  z-index: 5;
+
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border-strong);
+  background:
+    linear-gradient(180deg, rgba(255, 193, 7, .14), rgba(255, 193, 7, .05)),
+    var(--card-soft);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, .46);
+  backdrop-filter: blur(10px);
+
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  pointer-events: none;
+
+  transition:
+    opacity .2s ease,
+    transform .2s ease,
+    visibility .2s ease;
+}
+
+.party-size-alert::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: 20px;
+  width: 10px;
+  height: 10px;
+  background: inherit;
+  border-left: 1px solid var(--border-strong);
+  border-top: 1px solid var(--border-strong);
+  transform: rotate(45deg);
+}
+
+.party-size-alert[data-visible="true"] {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.party-size-alert-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(255, 193, 7, .16);
+  color: var(--brand);
+  line-height: 1;
+}
+
+.party-size-alert-copy {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: .86rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--fg);
+}
+
 .consent-grid { display: grid; gap: 10px; }
 
 .check-row {
@@ -442,4 +521,24 @@ dd { margin: 4px 0 0; }
   .dashboard-summary { grid-template-columns: 1fr; }
   .detail-hero { flex-direction: column; }
   .actions > form, .actions button, .actions .button { width: 100%; }
+
+  .party-size-alert {
+    position: static;
+    margin-top: 8px;
+    max-height: 0;
+    padding-block: 0;
+    overflow: hidden;
+    transform: none;
+    transition:
+      max-height .25s ease,
+      padding .2s ease,
+      opacity .2s ease,
+      visibility .25s ease;
+  }
+  .party-size-alert[data-visible="true"] {
+    max-height: 200px;
+    padding-block: 10px;
+    transform: none;
+  }
+  .party-size-alert::before { display: none; }
 }
