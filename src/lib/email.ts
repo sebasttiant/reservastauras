@@ -3,6 +3,7 @@ import path from "node:path";
 import nodemailer from "nodemailer";
 import { getEnv } from "@/lib/env";
 import type { PublicLanguage } from "@/lib/i18n/language";
+import type { ReservationLocationEmailInfo } from "@/lib/reservations/locations";
 import {
   getReservationEmailCopy,
   type ReservationEmailCopy,
@@ -15,6 +16,7 @@ export interface ConfirmationEmailInput {
   reservationDate: Date;
   reservationTime: string;
   area: string | null;
+  location: ReservationLocationEmailInfo;
   confirmedByName: string;
   confirmedByEmail: string;
   language: PublicLanguage;
@@ -26,6 +28,7 @@ export interface RejectionEmailInput {
   reservationDate: Date;
   reservationTime: string;
   area: string | null;
+  location: ReservationLocationEmailInfo;
   reason?: string;
   language: PublicLanguage;
 }
@@ -36,6 +39,7 @@ export interface CancellationEmailInput {
   reservationDate: Date;
   reservationTime: string;
   area: string | null;
+  location: ReservationLocationEmailInfo;
   language: PublicLanguage;
 }
 
@@ -46,6 +50,7 @@ interface ReservationEmailTemplateInput {
   reservationDate: Date;
   reservationTime: string;
   area: string | null;
+  location: ReservationLocationEmailInfo;
   extraRows?: string;
 }
 
@@ -107,7 +112,14 @@ function buildReservationEmailHtml(input: ReservationEmailTemplateInput): string
   const date = escapeHtml(formatReservationDate(input.reservationDate, copy.dateLocale));
   const time = escapeHtml(input.reservationTime);
   const area = escapeHtml(input.area || copy.labels.areaTbd);
+  const location = escapeHtml(input.location.reservationLabel);
   const name = escapeHtml(input.greetingName);
+  const contactRows = [
+    input.location.address ? detailRow(copy.labels.address, escapeHtml(input.location.address)) : null,
+    input.location.phone ? detailRow(copy.labels.phone, escapeHtml(input.location.phone)) : null,
+    input.location.whatsappUrl ? detailRow(copy.labels.whatsapp, escapeHtml(input.location.whatsappUrl)) : null,
+  ].filter((row): row is string => row !== null).join("");
+  const extraRows = `${contactRows}${input.extraRows ?? ""}`;
 
   return `
 <!DOCTYPE html>
@@ -139,8 +151,9 @@ function buildReservationEmailHtml(input: ReservationEmailTemplateInput): string
                     <table width="100%" cellpadding="0" cellspacing="0">
                       ${detailRow(copy.labels.date, date)}
                       ${detailRow(copy.labels.time, `${time}${escapeHtml(copy.timeSuffix)}`)}
-                      ${detailRow(copy.labels.area, area, !input.extraRows)}
-                      ${input.extraRows ?? ""}
+                      ${detailRow(copy.labels.location, location)}
+                      ${detailRow(copy.labels.area, area, !extraRows)}
+                      ${extraRows}
                     </table>
                   </td>
                 </tr>
@@ -173,6 +186,7 @@ export async function sendReservationConfirmationEmail(input: ConfirmationEmailI
     reservationDate: input.reservationDate,
     reservationTime: input.reservationTime,
     area: input.area,
+    location: input.location,
     extraRows: detailRow(copy.labels.confirmedBy, confirmedBy, false),
   });
 
@@ -197,6 +211,7 @@ export async function sendReservationRejectionEmail(input: RejectionEmailInput):
     reservationDate: input.reservationDate,
     reservationTime: input.reservationTime,
     area: input.area,
+    location: input.location,
     extraRows: reasonRow,
   });
 
@@ -220,6 +235,7 @@ export async function sendReservationCancellationEmail(input: CancellationEmailI
     reservationDate: input.reservationDate,
     reservationTime: input.reservationTime,
     area: input.area,
+    location: input.location,
   });
 
   await transporter.sendMail({

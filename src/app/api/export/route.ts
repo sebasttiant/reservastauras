@@ -63,7 +63,7 @@ export async function GET(request: Request) {
   const reservations = await prisma.reservation.findMany({
     where: buildReservationWhere(filters),
     orderBy: [{ reservationDate: "desc" }, { reservationTime: "desc" }, { createdAt: "desc" }],
-    include: { user: true, confirmedBy: true, createdByAdmin: true },
+    include: { user: true, confirmedBy: true, createdByAdmin: true, location: true },
     take: effectiveLimit + 1,
   });
 
@@ -104,6 +104,7 @@ export async function GET(request: Request) {
     Cliente: r.user.name,
     Email: r.user.email,
     Teléfono: r.user.phone ?? "",
+    Sede: r.location.reservationLabel,
     Área: r.area ?? "Sin área",
     Origen: formatReservationSource(r.source),
     Personas: r.partySize,
@@ -416,7 +417,8 @@ export async function GET(request: Request) {
       const linesPersonas = 1;
       const linesFecha = 1;
       const linesHora = 1;
-      const linesArea = wrapText(row.Área, 40).length;
+      const linesSede = wrapText(row.Sede, 40).length;
+      const linesArea = wrapText(row.Área, 42).length;
       const linesOrigen = wrapText(row.Origen, 42).length;
       const linesCreada = 1;
       const linesCargadaPor = wrapText(row["Cargada por"] || "-", 42).length;
@@ -430,7 +432,8 @@ export async function GET(request: Request) {
         rowSpace(Math.max(linesCliente, linesEmail)) +
         rowSpace(Math.max(linesTel, linesPersonas)) +
         rowSpace(Math.max(linesFecha, linesHora)) +
-        rowSpace(Math.max(linesArea, linesOrigen)) +
+        rowSpace(Math.max(linesSede, linesArea)) +
+        rowSpace(linesOrigen) +
         rowSpace(Math.max(linesCreada, linesCargadaPor));
       const confirmedH = rowSpace(linesConfirmado);
       const movementsH = rowSpace(linesMov);
@@ -497,9 +500,11 @@ export async function GET(request: Request) {
         { label: "Hora", value: row.Hora, max: 42 },
       );
       drawPair(
-        { label: "Área", value: row.Área, max: 40 },
-        { label: "Origen", value: row.Origen, max: 42 },
+        { label: "Sede", value: row.Sede, max: 40 },
+        { label: "Área", value: row.Área, max: 42 },
       );
+      const linesO = drawField("Origen", row.Origen, leftX, fieldY, 95);
+      fieldY -= rowSpace(linesO);
       drawPair(
         { label: "Creada en", value: row["Creada en"], max: 40 },
         { label: "Cargada por", value: row["Cargada por"] || "-", max: 42 },

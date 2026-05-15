@@ -10,6 +10,22 @@ if (!connectionString) {
 
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
+const DEFAULT_LOCATIONS = [
+  {
+    slug: "tauras-default",
+    name: "TAURAS Steakhouse",
+    shortName: "TAURAS",
+    reservationLabel: "TAURAS Steakhouse",
+    address: null,
+    phone: null,
+    whatsappUrl: null,
+    logoPath: "/tauras.png",
+    heroImagePath: null,
+    isActive: true,
+    sortOrder: 0,
+  },
+] as const;
+
 async function main() {
   const email = process.env.ADMIN_EMAIL;
   const password = process.env.ADMIN_PASSWORD;
@@ -29,6 +45,21 @@ async function main() {
       isActive: true,
     },
   });
+
+  for (const location of DEFAULT_LOCATIONS) {
+    await prisma.location.upsert({
+      where: { slug: location.slug },
+      update: {
+        name: location.name,
+        shortName: location.shortName,
+        reservationLabel: location.reservationLabel,
+        logoPath: location.logoPath,
+        isActive: location.isActive,
+        sortOrder: location.sortOrder,
+      },
+      create: location,
+    });
+  }
 }
 
 main()

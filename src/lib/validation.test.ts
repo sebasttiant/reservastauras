@@ -14,6 +14,7 @@ const FAR_FUTURE = "2026-12-31";
 const baseInput = {
   name: "Ada Lovelace",
   email: "ada@example.com",
+  locationSlug: "tauras-default",
   reservationTime: "20:00",
   partySize: "4",
   area: "Patio",
@@ -150,6 +151,25 @@ describe("reservationRequestSchema (con reloj fijado a Bogotá borde-de-día)", 
       customerLanguage: "foo",
     });
     expect(result.success).toBe(false);
+  });
+
+  it("requiere locationSlug para obligar la selección de sede", () => {
+    const inputWithoutLocation: Omit<typeof baseInput, "locationSlug"> = { ...baseInput };
+    delete (inputWithoutLocation as Partial<typeof baseInput>).locationSlug;
+    const result = reservationRequestSchema.safeParse({ ...inputWithoutLocation, reservationDate: FAR_FUTURE });
+    expect(result.success).toBe(false);
+  });
+
+  it("acepta locationSlug explícito", () => {
+    const result = reservationRequestSchema.safeParse({
+      ...baseInput,
+      reservationDate: FAR_FUTURE,
+      locationSlug: "tauras-default",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.locationSlug).toBe("tauras-default");
+    }
   });
 });
 

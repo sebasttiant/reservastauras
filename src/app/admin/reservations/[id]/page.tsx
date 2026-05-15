@@ -54,7 +54,7 @@ export default async function ReservationDetailPage({ params, searchParams }: Re
   const query = await searchParams;
   const reservation = await prisma.reservation.findUnique({
     where: { id },
-    include: { user: true, confirmedBy: true, createdByAdmin: true },
+    include: { user: true, confirmedBy: true, createdByAdmin: true, location: true },
   });
 
   if (!reservation) notFound();
@@ -65,6 +65,7 @@ export default async function ReservationDetailPage({ params, searchParams }: Re
       id: { not: reservation.id },
       reservationDate: reservation.reservationDate,
       reservationTime: reservation.reservationTime,
+      locationId: reservation.locationId,
       area: reservation.area,
       status: { in: [RESERVATION_STATUS.CONFIRMED, RESERVATION_STATUS.PENDING] },
     },
@@ -103,7 +104,7 @@ export default async function ReservationDetailPage({ params, searchParams }: Re
           <div>
           <p className="brand-kicker">Reserva {reservation.id}</p>
           <h1>{reservation.user.name}</h1>
-            <p className="muted">{reservation.reservationDate.toISOString().slice(0, 10)} · {reservation.reservationTime} · {reservation.area ?? "Sin área"}</p>
+            <p className="muted">{reservation.reservationDate.toISOString().slice(0, 10)} · {reservation.reservationTime} · {reservation.location.shortName} · {reservation.area ?? "Sin área"}</p>
           </div>
           <span className={`status-pill status-${reservation.status.toLowerCase()}`}>{STATUS_LABELS[reservation.status]}</span>
         </div>
@@ -120,6 +121,8 @@ export default async function ReservationDetailPage({ params, searchParams }: Re
 
         <dl className="grid two">
           <div><dt>Estado</dt><dd>{STATUS_LABELS[reservation.status]}</dd></div>
+          <div><dt>Sede</dt><dd>{reservation.location.reservationLabel}</dd></div>
+          <div><dt>Dirección sede</dt><dd>{reservation.location.address ?? "-"}</dd></div>
           <div><dt>Personas</dt><dd>{reservation.partySize}</dd></div>
           <div><dt>Origen</dt><dd>{RESERVATION_SOURCE_LABELS[reservation.source] ?? reservation.source}</dd></div>
           <div><dt>Idioma del cliente</dt><dd>{CUSTOMER_LANGUAGE_LABELS[customerLanguage]}</dd></div>

@@ -53,6 +53,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         { user: { name: { contains: query, mode: "insensitive" } } },
         { user: { email: { contains: query, mode: "insensitive" } } },
         { user: { phone: { contains: query, mode: "insensitive" } } },
+        { location: { name: { contains: query, mode: "insensitive" } } },
+        { location: { shortName: { contains: query, mode: "insensitive" } } },
+        { location: { reservationLabel: { contains: query, mode: "insensitive" } } },
         { area: { contains: query, mode: "insensitive" } },
       ],
     } : {}),
@@ -61,7 +64,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const reservations = await prisma.reservation.findMany({
     where,
     orderBy: [{ reservationDate: "desc" }, { reservationTime: "desc" }, { createdAt: "desc" }],
-    include: { user: true },
+    include: { user: true, location: true },
     take: 250,
   });
 
@@ -155,15 +158,16 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Fecha</th><th>Hora</th><th>Cliente</th><th>Teléfono</th><th>Área</th><th>Estado</th><th>Creada</th><th /></tr></thead>
+          <thead><tr><th>Fecha</th><th>Hora</th><th>Sede</th><th>Cliente</th><th>Teléfono</th><th>Área</th><th>Estado</th><th>Creada</th><th /></tr></thead>
           <tbody>
             {reservations.length === 0 ? (
-              <tr><td colSpan={8} className="muted">No hay reservas para este filtro.</td></tr>
+              <tr><td colSpan={9} className="muted">No hay reservas para este filtro.</td></tr>
             ) : (
               reservations.map((reservation) => (
                 <tr key={reservation.id}>
                   <td>{reservation.reservationDate.toISOString().slice(0, 10)}</td>
                   <td>{reservation.reservationTime}</td>
+                  <td>{reservation.location.shortName}</td>
                   <td>{reservation.user.name}<br /><span className="muted">{reservation.user.email}</span></td>
                   <td>{reservation.user.phone ?? "-"}</td>
                   <td>{reservation.area ?? "Sin área"}</td>

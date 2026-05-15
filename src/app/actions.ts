@@ -15,6 +15,7 @@ import {
   type PublicLanguage,
 } from "@/lib/i18n/language";
 import { canTransitionReservation } from "@/lib/reservations/state";
+import { resolveActiveLocationById, resolveActiveLocationBySlug } from "@/lib/reservations/locations";
 import { createAdminSchema, formDataToRecord, loginSchema, manualReservationSchema, reservationRequestSchema, toggleAdminSchema } from "@/lib/validation";
 import { requireAdmin, requireSuperAdmin, signInAdmin, signOutAdmin } from "@/lib/auth";
 import { getClientIp } from "@/lib/auth/client-ip";
@@ -96,6 +97,9 @@ export async function createReservationAction(formData: FormData): Promise<void>
   if (!parsed.success) redirectPublicWithError(requestedLanguage, "invalid-data");
 
   const input = parsed.data;
+  const location = await resolveActiveLocationBySlug(input.locationSlug);
+  if (!location) redirectPublicWithError(requestedLanguage, "invalid-data");
+
   const user = await prisma.user.upsert({
     where: { email: input.email },
     update: { name: input.name, phone: normalizeOptionalText(input.phone) },
@@ -105,6 +109,7 @@ export async function createReservationAction(formData: FormData): Promise<void>
   await prisma.reservation.create({
     data: {
       userId: user.id,
+      locationId: location.id,
       reservationDate: toDateOnly(input.reservationDate),
       reservationTime: input.reservationTime,
       area: normalizeOptionalText(input.area),
@@ -212,6 +217,9 @@ export async function createManualReservationAction(formData: FormData): Promise
   if (!parsed.success) redirectWithError("/admin/reservations/new", "invalid-data");
 
   const input = parsed.data;
+  const location = await resolveActiveLocationById(input.locationId);
+  if (!location) redirectWithError("/admin/reservations/new", "invalid-data");
+
   const user = await prisma.user.upsert({
     where: { email: input.email },
     update: { name: input.name, phone: normalizeOptionalText(input.phone) },
@@ -222,6 +230,7 @@ export async function createManualReservationAction(formData: FormData): Promise
   const reservation = await prisma.reservation.create({
     data: {
       userId: user.id,
+      locationId: location.id,
       reservationDate: toDateOnly(input.reservationDate),
       reservationTime: input.reservationTime,
       area: normalizeOptionalText(input.area),
@@ -283,7 +292,7 @@ type ConfirmFailure =
   | { kind: "concurrent-update" };
 
 type ConfirmOutcome =
-  | { ok: true; reservation: Prisma.ReservationGetPayload<{ include: { user: true } }> }
+  | { ok: true; reservation: Prisma.ReservationGetPayload<{ include: { user: true; location: true } }> }
   | { ok: false; failure: ConfirmFailure };
 
 const CONFIRM_ERROR_KEYS: Record<ConfirmFailure["kind"], string> = {
@@ -316,7 +325,7 @@ export async function confirmReservationAction(formData: FormData): Promise<void
             confirmedById: admin.adminId,
             emailError: null,
           },
-          include: { user: true },
+          include: { user: true, location: true },
         });
         return { ok: true, reservation: updated };
       },
@@ -360,6 +369,7 @@ export async function confirmReservationAction(formData: FormData): Promise<void
       reservationDate: confirmed.reservationDate,
       reservationTime: confirmed.reservationTime,
       area: confirmed.area,
+      location: confirmed.location,
       confirmedByName: admin.name,
       confirmedByEmail: admin.email,
       language: parsePublicLanguage(confirmed.customerLanguage),
@@ -400,7 +410,7 @@ export async function resendConfirmationEmailAction(formData: FormData): Promise
 
   const reservation = await prisma.reservation.findUnique({
     where: { id: reservationId },
-    include: { user: true, confirmedBy: true },
+    include: { user: true, confirmedBy: true, location: true },
   });
 
   if (!reservation) {
@@ -426,6 +436,7 @@ export async function resendConfirmationEmailAction(formData: FormData): Promise
       reservationDate: reservation.reservationDate,
       reservationTime: reservation.reservationTime,
       area: reservation.area,
+      location: reservation.location,
       confirmedByName: responsibleName,
       confirmedByEmail: responsibleEmail,
       language: parsePublicLanguage(reservation.customerLanguage),
@@ -481,7 +492,7 @@ export async function rejectReservationAction(formData: FormData): Promise<void>
 
   const reservation = await prisma.reservation.findUnique({
     where: { id: reservationId },
-    include: { user: true },
+    include: { user: true, location: true },
   });
   if (!reservation || !canTransitionReservation(reservation.status, RESERVATION_STATUS.REJECTED)) {
     redirectWithError(`/admin/reservations/${reservationId}`, "invalid-state-reject");
@@ -508,6 +519,7 @@ export async function rejectReservationAction(formData: FormData): Promise<void>
       reservationDate: reservation.reservationDate,
       reservationTime: reservation.reservationTime,
       area: reservation.area,
+      location: reservation.location,
       reason: reason,
       language: parsePublicLanguage(reservation.customerLanguage),
     });
@@ -529,7 +541,7 @@ export async function cancelReservationAction(formData: FormData): Promise<void>
 
   const reservation = await prisma.reservation.findUnique({
     where: { id: reservationId },
-    include: { user: true },
+    include: { user: true, location: true },
   });
   if (!reservation || !canTransitionReservation(reservation.status, RESERVATION_STATUS.CANCELLED)) {
     redirectWithError(`/admin/reservations/${reservationId}`, "invalid-state-cancel");
@@ -555,6 +567,7 @@ export async function cancelReservationAction(formData: FormData): Promise<void>
       reservationDate: reservation.reservationDate,
       reservationTime: reservation.reservationTime,
       area: reservation.area,
+      location: reservation.location,
       language: parsePublicLanguage(reservation.customerLanguage),
     });
   } catch (error: unknown) {

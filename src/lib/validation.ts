@@ -44,10 +44,13 @@ const phoneSchema = z
     error: "Ingresá un teléfono válido de 7 a 15 dígitos.",
   });
 
+const locationSlugSchema = z.string().trim().min(1, { error: "Seleccioná una sede." }).max(80);
+
 export const reservationRequestSchema = z.object({
   name: z.string().trim().min(2, { error: "Ingresá tu nombre." }).max(120),
   email: z.email({ error: "Ingresá un email válido." }).transform((value) => value.toLowerCase()),
   phone: phoneSchema,
+  locationSlug: locationSlugSchema,
   country: z.string().trim().min(2, { error: "Seleccioná tu país." }).max(80),
   reservationDate: dateOnlySchema,
   reservationTime: timeSchema,
@@ -85,6 +88,7 @@ export const manualReservationSchema = z.object({
   name: z.string().trim().min(2, { error: "Ingresá el nombre del cliente." }).max(120),
   email: z.email({ error: "Email inválido." }).transform((value) => value.toLowerCase()),
   phone: phoneSchema,
+  locationId: z.string().trim().min(1, { error: "Seleccioná una sede." }),
   reservationDate: dateOnlySchema,
   reservationTime: timeSchema,
   area: z.string().trim().max(80).optional(),

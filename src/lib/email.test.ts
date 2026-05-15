@@ -44,6 +44,13 @@ beforeEach(() => {
 
 const FIXED_DATE = new Date("2026-12-25T18:00:00Z");
 
+const EMAIL_LOCATION = {
+  reservationLabel: "TAURAS Steakhouse",
+  address: "Calle 123",
+  phone: "+57 300 123 4567",
+  whatsappUrl: "https://wa.me/573001234567",
+};
+
 describe("sendReservationConfirmationEmail", () => {
   it("renders Spanish copy when language is 'es'", async () => {
     const { sendReservationConfirmationEmail } = await import("@/lib/email");
@@ -53,6 +60,7 @@ describe("sendReservationConfirmationEmail", () => {
       reservationDate: FIXED_DATE,
       reservationTime: "20:00",
       area: "Patio",
+      location: EMAIL_LOCATION,
       confirmedByName: "Admin",
       confirmedByEmail: "admin@tauras.test",
       language: "es",
@@ -66,6 +74,10 @@ describe("sendReservationConfirmationEmail", () => {
     expect(html).toContain("<strong>confirmada exitosamente</strong>");
     expect(html).toContain("Fecha");
     expect(html).toContain("Hora");
+    expect(html).toContain("Sede");
+    expect(html).toContain("TAURAS Steakhouse");
+    expect(html).toContain("Calle 123");
+    expect(html).toContain("https://wa.me/573001234567");
     expect(html).toContain("Sector");
     expect(html).toContain("Confirmado por");
     expect(html).toContain("Todos los derechos reservados.");
@@ -85,6 +97,7 @@ describe("sendReservationConfirmationEmail", () => {
       reservationDate: FIXED_DATE,
       reservationTime: "20:00",
       area: "Patio",
+      location: EMAIL_LOCATION,
       confirmedByName: "Admin",
       confirmedByEmail: "admin@tauras.test",
       language: "en",
@@ -98,6 +111,7 @@ describe("sendReservationConfirmationEmail", () => {
     expect(html).toContain("<strong>successfully confirmed</strong>");
     expect(html).toContain("Date");
     expect(html).toContain("Time");
+    expect(html).toContain("Location");
     expect(html).toContain("Area");
     expect(html).toContain("Confirmed by");
     expect(html).toContain("All rights reserved.");
@@ -118,6 +132,7 @@ describe("sendReservationConfirmationEmail", () => {
       reservationDate: FIXED_DATE,
       reservationTime: "20:00",
       area: "Patio",
+      location: EMAIL_LOCATION,
       confirmedByName: "Admin",
       confirmedByEmail: "admin@tauras.test",
       language: "en",
@@ -136,6 +151,7 @@ describe("sendReservationConfirmationEmail", () => {
       reservationDate: FIXED_DATE,
       reservationTime: "20:00",
       area: '<img src=x onerror="alert(1)">',
+      location: EMAIL_LOCATION,
       confirmedByName: "Admin",
       confirmedByEmail: "admin@tauras.test",
       language: "es",
@@ -154,6 +170,7 @@ describe("sendReservationConfirmationEmail", () => {
       reservationDate: FIXED_DATE,
       reservationTime: "20:00",
       area: "Patio",
+      location: EMAIL_LOCATION,
       confirmedByName: '<script>alert("name")</script>',
       confirmedByEmail: '"><img src=x>',
       language: "es",
@@ -175,6 +192,7 @@ describe("sendReservationConfirmationEmail", () => {
       reservationDate: FIXED_DATE,
       reservationTime: "20:00",
       area: null,
+      location: EMAIL_LOCATION,
       confirmedByName: "Admin",
       confirmedByEmail: "admin@tauras.test",
       language: "es",
@@ -187,6 +205,7 @@ describe("sendReservationConfirmationEmail", () => {
       reservationDate: FIXED_DATE,
       reservationTime: "20:00",
       area: null,
+      location: EMAIL_LOCATION,
       confirmedByName: "Admin",
       confirmedByEmail: "admin@tauras.test",
       language: "en",
@@ -203,6 +222,7 @@ describe("sendReservationConfirmationEmail", () => {
       reservationDate: FIXED_DATE,
       reservationTime: "20:00",
       area: "Patio",
+      location: EMAIL_LOCATION,
       confirmedByName: "Admin",
       confirmedByEmail: "admin@tauras.test",
       language: "es",
@@ -215,6 +235,7 @@ describe("sendReservationConfirmationEmail", () => {
       reservationDate: FIXED_DATE,
       reservationTime: "20:00",
       area: "Patio",
+      location: EMAIL_LOCATION,
       confirmedByName: "Admin",
       confirmedByEmail: "admin@tauras.test",
       language: "en",
@@ -237,6 +258,7 @@ describe("sendReservationConfirmationEmail", () => {
         reservationDate: knownDate,
         reservationTime: "20:00",
         area: "Patio",
+        location: EMAIL_LOCATION,
         confirmedByName: "Admin",
         confirmedByEmail: "admin@tauras.test",
         language: "es",
@@ -252,6 +274,7 @@ describe("sendReservationConfirmationEmail", () => {
         reservationDate: knownDate,
         reservationTime: "20:00",
         area: "Patio",
+        location: EMAIL_LOCATION,
         confirmedByName: "Admin",
         confirmedByEmail: "admin@tauras.test",
         language: "en",
@@ -273,6 +296,7 @@ describe("sendReservationRejectionEmail", () => {
       reservationDate: FIXED_DATE,
       reservationTime: "20:00",
       area: "Patio",
+      location: EMAIL_LOCATION,
       reason: '<script>alert("reason")</script>',
       language: "es",
     });
@@ -290,6 +314,7 @@ describe("sendReservationRejectionEmail", () => {
       reservationDate: FIXED_DATE,
       reservationTime: "20:00",
       area: "Patio",
+      location: EMAIL_LOCATION,
       reason: "El restaurante está cerrado por feriado",
       language: "en",
     });
@@ -314,6 +339,7 @@ describe("sendReservationCancellationEmail", () => {
       reservationDate: FIXED_DATE,
       reservationTime: "20:00",
       area: "Patio",
+      location: EMAIL_LOCATION,
       language: "es",
     });
 
