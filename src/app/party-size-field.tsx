@@ -26,6 +26,7 @@ export function PartySizeField({ label, alertCopy, defaultValue }: PartySizeFiel
         required
         aria-describedby={isAlertVisible ? PARTY_SIZE_ALERT_ID : undefined}
         onChange={(event) => setIsAlertVisible(event.currentTarget.value.trim().length > 0)}
+        onBlur={() => setIsAlertVisible(false)}
       />
       <div
         id={PARTY_SIZE_ALERT_ID}

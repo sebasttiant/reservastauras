@@ -121,6 +121,8 @@ export class ReservationsPage extends BasePage {
     await expect(this.page.getByText(copy.partySizeHint)).toBeHidden();
     await partySizeInput.fill("4");
     await expect(this.page.getByText(copy.partySizeHint)).toBeVisible();
+    await this.page.getByRole("textbox", { name: copy.dateLabel, exact: true }).focus();
+    await expect(this.page.getByText(copy.partySizeHint)).toBeHidden();
     await expect(this.page.getByRole("textbox", { name: copy.dateLabel, exact: true })).toBeVisible();
     await expect(this.page.getByRole("combobox", { name: copy.timeLabel, exact: true })).toBeVisible();
     await expect(this.page.getByRole("combobox", { name: copy.reasonLabel, exact: true })).toBeVisible();
