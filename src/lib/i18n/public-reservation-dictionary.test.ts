@@ -43,8 +43,8 @@ describe("public reservation dictionary", () => {
   });
 
   it("includes localized party size guidance to prevent guest-count mistakes", () => {
-    expect(getPublicReservationCopy("es").form.partySizeHelp).toContain("total real de asistentes");
-    expect(getPublicReservationCopy("en").form.partySizeHelp).toContain("real total of guests");
+    expect(getPublicReservationCopy("es").form.partySizeHelp).toContain("niños y bebés");
+    expect(getPublicReservationCopy("en").form.partySizeHelp).toContain("children and babies");
   });
 
   it("localizes visible area/reason labels while keeping canonical option values", () => {

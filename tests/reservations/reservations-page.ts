@@ -26,7 +26,7 @@ const RESERVATION_COPY = {
     sectionName: "Formulario de reserva Tauras Steakhouse",
     areaLabel: "Zona",
     partySizeLabel: "Cantidad de personas",
-    partySizeHint: "Incluí a los niños en el total.",
+    partySizeHint: "Para preparar bien tu mesa, incluí niños y bebés en el total.",
     dateLabel: "Fecha",
     timeLabel: "Hora disponible",
     reasonLabel: "Motivo de la reserva",
@@ -44,7 +44,7 @@ const RESERVATION_COPY = {
     sectionName: "Tauras Steakhouse reservation form",
     areaLabel: "Area",
     partySizeLabel: "Number of guests",
-    partySizeHint: "Include children in the total.",
+    partySizeHint: "Include children and babies in the total so we can prepare the right table.",
     dateLabel: "Date",
     timeLabel: "Available time",
     reasonLabel: "Reservation reason",
@@ -113,6 +113,8 @@ export class ReservationsPage extends BasePage {
     await expect(this.page.getByRole("combobox", { name: copy.areaLabel, exact: true })).toBeVisible();
     const partySizeInput = this.page.getByRole("spinbutton", { name: copy.partySizeLabel, exact: true });
     await expect(partySizeInput).toBeVisible();
+    await expect(this.page.getByText(copy.partySizeHint)).toBeHidden();
+    await partySizeInput.fill("4");
     await expect(this.page.getByText(copy.partySizeHint)).toBeVisible();
     await expect(this.page.getByRole("textbox", { name: copy.dateLabel, exact: true })).toBeVisible();
     await expect(this.page.getByRole("combobox", { name: copy.timeLabel, exact: true })).toBeVisible();
