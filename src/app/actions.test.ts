@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Prisma } from "@prisma/client";
 import { RESERVATION_STATUS } from "@/lib/constants";
 
 const mocks = vi.hoisted(() => ({
@@ -486,6 +487,14 @@ describe("rejectReservationAction (bilingual email wiring)", () => {
     mocks.getRequestSecurityContext.mockReturnValue({ ip: "127.0.0.1", userAgent: "vitest" });
     mocks.recordAuditLog.mockResolvedValue(undefined);
     mocks.sendReservationRejectionEmail.mockResolvedValue(undefined);
+    mocks.transaction.mockImplementation(async (callback: (transactionClient: {
+      reservation: { findUnique: typeof mocks.reservationFindUnique; update: typeof mocks.reservationUpdate };
+    }) => Promise<unknown>) => callback({
+      reservation: {
+        findUnique: mocks.reservationFindUnique,
+        update: mocks.reservationUpdate,
+      },
+    }));
     mocks.redirect.mockImplementation((url: string) => {
       throw new Error(`redirect:${url}`);
     });
@@ -509,7 +518,15 @@ describe("rejectReservationAction (bilingual email wiring)", () => {
         phone: null,
       },
     });
-    mocks.reservationUpdate.mockResolvedValue({ id: "reservation-2" });
+    mocks.reservationUpdate.mockResolvedValue({
+      id: "reservation-2",
+      reservationDate: new Date("2026-06-10T00:00:00Z"),
+      reservationTime: "20:00",
+      area: "Patio",
+      customerLanguage: "en",
+      user: { id: "user-2", name: "Client", email: "client@tauras.test", phone: null },
+      location: { id: "location-1", slug: "tauras-default", name: "TAURAS", shortName: "TAURAS", reservationLabel: "TAURAS" },
+    });
 
     const formData = new FormData();
     formData.set("reservationId", "reservation-2");
@@ -527,6 +544,17 @@ describe("rejectReservationAction (bilingual email wiring)", () => {
     expect(arg.language).toBe("en");
     // El motivo del staff NUNCA se traduce: pasa raw al email.
     expect(arg.reason).toBe("El restaurante está cerrado por feriado");
+    expect(mocks.reservationUpdate).toHaveBeenCalledWith({
+      where: { id: "reservation-2" },
+      data: expect.objectContaining({
+        status: RESERVATION_STATUS.REJECTED,
+        rejectedAt: expect.any(Date),
+        rejectedById: "admin-1",
+        rejectionReason: "El restaurante está cerrado por feriado",
+        emailError: null,
+      }),
+      include: { user: true, location: true },
+    });
   });
 
   it("defensively falls back to 'en' when rejecting an unsupported reservation language", async () => {
@@ -547,7 +575,15 @@ describe("rejectReservationAction (bilingual email wiring)", () => {
         phone: null,
       },
     });
-    mocks.reservationUpdate.mockResolvedValue({ id: "reservation-2" });
+    mocks.reservationUpdate.mockResolvedValue({
+      id: "reservation-2",
+      reservationDate: new Date("2026-06-10T00:00:00Z"),
+      reservationTime: "20:00",
+      area: "Patio",
+      customerLanguage: "fr",
+      user: { id: "user-2", name: "Client", email: "client@tauras.test", phone: null },
+      location: { id: "location-1", slug: "tauras-default", name: "TAURAS", shortName: "TAURAS", reservationLabel: "TAURAS" },
+    });
 
     const formData = new FormData();
     formData.set("reservationId", "reservation-2");
@@ -559,6 +595,36 @@ describe("rejectReservationAction (bilingual email wiring)", () => {
 
     const [arg] = mocks.sendReservationRejectionEmail.mock.calls[0] as [{ language: string }];
     expect(arg.language).toBe("en");
+    expect(mocks.reservationUpdate).toHaveBeenCalledWith({
+      where: { id: "reservation-2" },
+      data: expect.objectContaining({
+        status: RESERVATION_STATUS.REJECTED,
+        rejectedById: "admin-1",
+        rejectionReason: null,
+        emailError: null,
+      }),
+      include: { user: true, location: true },
+    });
+  });
+
+  it("redirects concurrent reject conflicts without sending email or audit", async () => {
+    mocks.transaction.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError("Serializable transaction conflict", {
+        code: "P2034",
+        clientVersion: "test",
+      }),
+    );
+
+    const formData = new FormData();
+    formData.set("reservationId", "reservation-2");
+
+    const { rejectReservationAction } = await import("@/app/actions");
+    await expect(rejectReservationAction(formData)).rejects.toThrow(
+      "redirect:/admin/reservations/reservation-2?error=concurrent-update",
+    );
+
+    expect(mocks.sendReservationRejectionEmail).not.toHaveBeenCalled();
+    expect(mocks.recordAuditLog).not.toHaveBeenCalled();
   });
 });
 
@@ -576,6 +642,14 @@ describe("cancelReservationAction (bilingual email wiring)", () => {
     mocks.getRequestSecurityContext.mockReturnValue({ ip: "127.0.0.1", userAgent: "vitest" });
     mocks.recordAuditLog.mockResolvedValue(undefined);
     mocks.sendReservationCancellationEmail.mockResolvedValue(undefined);
+    mocks.transaction.mockImplementation(async (callback: (transactionClient: {
+      reservation: { findUnique: typeof mocks.reservationFindUnique; update: typeof mocks.reservationUpdate };
+    }) => Promise<unknown>) => callback({
+      reservation: {
+        findUnique: mocks.reservationFindUnique,
+        update: mocks.reservationUpdate,
+      },
+    }));
     mocks.redirect.mockImplementation((url: string) => {
       throw new Error(`redirect:${url}`);
     });
@@ -599,10 +673,19 @@ describe("cancelReservationAction (bilingual email wiring)", () => {
         phone: null,
       },
     });
-    mocks.reservationUpdate.mockResolvedValue({ id: "reservation-3" });
+    mocks.reservationUpdate.mockResolvedValue({
+      id: "reservation-3",
+      reservationDate: new Date("2026-06-10T00:00:00Z"),
+      reservationTime: "20:00",
+      area: "Patio",
+      customerLanguage: "en",
+      user: { id: "user-3", name: "Client", email: "client@tauras.test", phone: null },
+      location: { id: "location-1", slug: "tauras-default", name: "TAURAS", shortName: "TAURAS", reservationLabel: "TAURAS" },
+    });
 
     const formData = new FormData();
     formData.set("reservationId", "reservation-3");
+    formData.set("reason", "Por solicitud del cliente");
 
     const { cancelReservationAction } = await import("@/app/actions");
     await expect(cancelReservationAction(formData)).rejects.toThrow(
@@ -612,6 +695,17 @@ describe("cancelReservationAction (bilingual email wiring)", () => {
     expect(mocks.sendReservationCancellationEmail).toHaveBeenCalledOnce();
     const [arg] = mocks.sendReservationCancellationEmail.mock.calls[0] as [{ language: string }];
     expect(arg.language).toBe("en");
+    expect(mocks.reservationUpdate).toHaveBeenCalledWith({
+      where: { id: "reservation-3" },
+      data: expect.objectContaining({
+        status: RESERVATION_STATUS.CANCELLED,
+        cancelledAt: expect.any(Date),
+        cancelledById: "admin-1",
+        cancellationReason: "Por solicitud del cliente",
+        emailError: null,
+      }),
+      include: { user: true, location: true },
+    });
   });
 
   it("defensively falls back to 'en' when cancelling an unsupported reservation language", async () => {
@@ -632,7 +726,15 @@ describe("cancelReservationAction (bilingual email wiring)", () => {
         phone: null,
       },
     });
-    mocks.reservationUpdate.mockResolvedValue({ id: "reservation-3" });
+    mocks.reservationUpdate.mockResolvedValue({
+      id: "reservation-3",
+      reservationDate: new Date("2026-06-10T00:00:00Z"),
+      reservationTime: "20:00",
+      area: "Patio",
+      customerLanguage: "fr",
+      user: { id: "user-3", name: "Client", email: "client@tauras.test", phone: null },
+      location: { id: "location-1", slug: "tauras-default", name: "TAURAS", shortName: "TAURAS", reservationLabel: "TAURAS" },
+    });
 
     const formData = new FormData();
     formData.set("reservationId", "reservation-3");
@@ -644,6 +746,36 @@ describe("cancelReservationAction (bilingual email wiring)", () => {
 
     const [arg] = mocks.sendReservationCancellationEmail.mock.calls[0] as [{ language: string }];
     expect(arg.language).toBe("en");
+    expect(mocks.reservationUpdate).toHaveBeenCalledWith({
+      where: { id: "reservation-3" },
+      data: expect.objectContaining({
+        status: RESERVATION_STATUS.CANCELLED,
+        cancelledById: "admin-1",
+        cancellationReason: null,
+        emailError: null,
+      }),
+      include: { user: true, location: true },
+    });
+  });
+
+  it("redirects concurrent cancel conflicts without sending email or audit", async () => {
+    mocks.transaction.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError("Serializable transaction conflict", {
+        code: "P2034",
+        clientVersion: "test",
+      }),
+    );
+
+    const formData = new FormData();
+    formData.set("reservationId", "reservation-3");
+
+    const { cancelReservationAction } = await import("@/app/actions");
+    await expect(cancelReservationAction(formData)).rejects.toThrow(
+      "redirect:/admin/reservations/reservation-3?error=concurrent-update",
+    );
+
+    expect(mocks.sendReservationCancellationEmail).not.toHaveBeenCalled();
+    expect(mocks.recordAuditLog).not.toHaveBeenCalled();
   });
 });
 

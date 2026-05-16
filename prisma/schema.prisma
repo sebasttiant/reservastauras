@@ -28,6 +28,8 @@ model Admin {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   confirmed    Reservation[] @relation("ReservationConfirmedBy")
+  rejected     Reservation[] @relation("ReservationRejectedBy")
+  cancelled    Reservation[] @relation("ReservationCancelledBy")
   createdReservations Reservation[] @relation("ReservationCreatedBy")
   auditLogs    AuditLog[]
 }
@@ -81,7 +83,13 @@ model Reservation {
   confirmedById   String?
   confirmedBy     Admin?            @relation("ReservationConfirmedBy", fields: [confirmedById], references: [id])
   rejectedAt      DateTime?
+  rejectedById    String?
+  rejectedBy      Admin?            @relation("ReservationRejectedBy", fields: [rejectedById], references: [id], onDelete: SetNull)
+  rejectionReason String?
   cancelledAt     DateTime?
+  cancelledById   String?
+  cancelledBy     Admin?            @relation("ReservationCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  cancellationReason String?
   emailError      String?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
@@ -91,6 +99,8 @@ model Reservation {
   @@index([area])
   @@index([source])
   @@index([createdByAdminId])
+  @@index([rejectedById])
+  @@index([cancelledById])
 }
 
 model LoginAttempt {
