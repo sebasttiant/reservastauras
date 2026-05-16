@@ -3,6 +3,7 @@ import { createManualReservationAction } from "@/app/actions";
 import { RESERVATION_SOURCE, RESERVATION_STATUS } from "@/lib/constants";
 import { requireAdmin } from "@/lib/auth";
 import { MANUAL_RESERVATION_ERROR_MESSAGES, lookupMessage } from "@/lib/messages";
+import { getActiveReservationLocations } from "@/lib/reservations/locations";
 
 interface NewReservationPageProps {
   searchParams: Promise<Record<string, string | undefined>>;
@@ -32,6 +33,7 @@ export const dynamic = "force-dynamic";
 export default async function NewReservationPage({ searchParams }: NewReservationPageProps) {
   await requireAdmin();
   const params = await searchParams;
+  const locations = await getActiveReservationLocations();
   const errorMessage = lookupMessage(MANUAL_RESERVATION_ERROR_MESSAGES, params.error);
 
   return (
@@ -57,6 +59,14 @@ export default async function NewReservationPage({ searchParams }: NewReservatio
               <select name="status" defaultValue={RESERVATION_STATUS.PENDING} required>
                 <option value={RESERVATION_STATUS.PENDING}>Pendiente</option>
                 <option value={RESERVATION_STATUS.CONFIRMED}>Confirmada sin email automático</option>
+              </select>
+            </label>
+            <label>Sede
+              <select name="locationId" required defaultValue={locations[0]?.id ?? ""}>
+                {locations.length === 0 ? <option value="" disabled>No hay sedes activas</option> : null}
+                {locations.map((location) => (
+                  <option key={location.id} value={location.id}>{location.reservationLabel}</option>
+                ))}
               </select>
             </label>
             <label>Fecha<input name="reservationDate" type="date" required /></label>

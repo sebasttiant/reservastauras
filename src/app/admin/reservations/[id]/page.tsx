@@ -9,6 +9,7 @@ import { requireAdmin } from "@/lib/auth";
 import { parsePublicLanguage } from "@/lib/i18n/language";
 import type { PublicLanguage } from "@/lib/i18n/language";
 import { RESERVATION_DETAIL_ERROR_MESSAGES, lookupMessage } from "@/lib/messages";
+import { ReservationReasonPicker } from "./_components/reservation-reason-picker";
 
 interface ReservationDetailPageProps {
   params: Promise<{ id: string }>;
@@ -16,12 +17,76 @@ interface ReservationDetailPageProps {
 }
 
 const SUCCESS_MESSAGES: Record<string, string> = {
-  confirmed: "Reserva confirmada. Si el email tuvo algún problema, lo vas a ver debajo.",
-  "manual-created": "Reserva cargada manualmente. No se envió email automático.",
-  "email-resent": "Email de confirmación reenviado al cliente.",
-  rejected: "Reserva rechazada correctamente.",
-  cancelled: "Reserva cancelada correctamente.",
+  confirmed: "La reserva fue confirmada correctamente. Si el email tuvo algún problema, lo vas a ver debajo.",
+  "manual-created": "La reserva fue cargada manualmente. No se envió email automático al cliente.",
+  "email-resent": "El email de confirmación fue reenviado al cliente.",
+  rejected: "La reserva fue rechazada correctamente.",
+  cancelled: "La reserva fue cancelada correctamente.",
 };
+
+const NOT_AVAILABLE_LABEL = "No disponible";
+const REJECTION_REASON_PREFIX = "RECHAZO:";
+const STATUS_OUTCOME_OK_KEYS = new Set(["confirmed", "rejected", "cancelled"]);
+
+const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("es-AR", {
+  dateStyle: "long",
+  timeStyle: "short",
+});
+
+function formatActionDate(date: Date | null | undefined): string {
+  if (!date) return NOT_AVAILABLE_LABEL;
+  return DATE_TIME_FORMATTER.format(date);
+}
+
+function extractRejectionReasonFromNotes(notes: string | null | undefined): string | null {
+  if (!notes) return null;
+  const firstLine = notes.split("\n", 1)[0]?.trim() ?? "";
+  if (!firstLine.startsWith(REJECTION_REASON_PREFIX)) return null;
+  const reason = firstLine.slice(REJECTION_REASON_PREFIX.length).trim();
+  return reason.length > 0 ? reason : null;
+}
+
+interface StatusOutcomeNoticeProps {
+  tone: "confirmed" | "rejected" | "cancelled";
+  headline: string;
+  actorLabel: string;
+  actorValue: string;
+  reasonValue?: string;
+  dateLabel: string;
+  dateValue: string;
+}
+
+function StatusOutcomeNotice({
+  tone,
+  headline,
+  actorLabel,
+  actorValue,
+  reasonValue,
+  dateLabel,
+  dateValue,
+}: StatusOutcomeNoticeProps) {
+  return (
+    <aside className={`notice status-outcome status-outcome-${tone}`} aria-live="polite">
+      <strong>{headline}</strong>
+      <dl className="status-outcome-list">
+        <div>
+          <dt>{actorLabel}</dt>
+          <dd>{actorValue}</dd>
+        </div>
+        {reasonValue !== undefined ? (
+          <div>
+            <dt>Motivo</dt>
+            <dd>{reasonValue}</dd>
+          </div>
+        ) : null}
+        <div>
+          <dt>{dateLabel}</dt>
+          <dd>{dateValue}</dd>
+        </div>
+      </dl>
+    </aside>
+  );
+}
 
 const STATUS_LABELS: Record<string, string> = {
   [RESERVATION_STATUS.PENDING]: "Pendiente",
@@ -54,7 +119,7 @@ export default async function ReservationDetailPage({ params, searchParams }: Re
   const query = await searchParams;
   const reservation = await prisma.reservation.findUnique({
     where: { id },
-    include: { user: true, confirmedBy: true, createdByAdmin: true },
+    include: { user: true, confirmedBy: true, rejectedBy: true, cancelledBy: true, createdByAdmin: true, location: true },
   });
 
   if (!reservation) notFound();
@@ -65,6 +130,7 @@ export default async function ReservationDetailPage({ params, searchParams }: Re
       id: { not: reservation.id },
       reservationDate: reservation.reservationDate,
       reservationTime: reservation.reservationTime,
+      locationId: reservation.locationId,
       area: reservation.area,
       status: { in: [RESERVATION_STATUS.CONFIRMED, RESERVATION_STATUS.PENDING] },
     },
@@ -95,6 +161,40 @@ export default async function ReservationDetailPage({ params, searchParams }: Re
   const hasActions = canConfirm || canReject || canCancel || canResendConfirmationEmail;
   const customerLanguage = parsePublicLanguage(reservation.customerLanguage);
 
+  const rejectionReasonFromNotes = extractRejectionReasonFromNotes(reservation.notes);
+
+  let statusOutcome: StatusOutcomeNoticeProps | null = null;
+  if (reservation.status === RESERVATION_STATUS.CONFIRMED) {
+    statusOutcome = {
+      tone: "confirmed",
+      headline: "La reserva fue confirmada correctamente.",
+      actorLabel: "Confirmada por",
+      actorValue: reservation.confirmedBy?.email ?? NOT_AVAILABLE_LABEL,
+      dateLabel: "Fecha de confirmación",
+      dateValue: formatActionDate(reservation.confirmedAt),
+    };
+  } else if (reservation.status === RESERVATION_STATUS.REJECTED) {
+    statusOutcome = {
+      tone: "rejected",
+      headline: "La reserva fue rechazada correctamente.",
+      actorLabel: "Rechazada por",
+      actorValue: reservation.rejectedBy?.email ?? NOT_AVAILABLE_LABEL,
+      reasonValue: reservation.rejectionReason ?? rejectionReasonFromNotes ?? NOT_AVAILABLE_LABEL,
+      dateLabel: "Fecha de rechazo",
+      dateValue: formatActionDate(reservation.rejectedAt),
+    };
+  } else if (reservation.status === RESERVATION_STATUS.CANCELLED) {
+    statusOutcome = {
+      tone: "cancelled",
+      headline: "La reserva fue cancelada correctamente.",
+      actorLabel: "Cancelada por",
+      actorValue: reservation.cancelledBy?.email ?? NOT_AVAILABLE_LABEL,
+      reasonValue: reservation.cancellationReason ?? NOT_AVAILABLE_LABEL,
+      dateLabel: "Fecha de cancelación",
+      dateValue: formatActionDate(reservation.cancelledAt),
+    };
+  }
+
   return (
     <main className="admin-shell">
       <Link className="back-link" href="/admin">← Volver al dashboard</Link>
@@ -103,12 +203,13 @@ export default async function ReservationDetailPage({ params, searchParams }: Re
           <div>
           <p className="brand-kicker">Reserva {reservation.id}</p>
           <h1>{reservation.user.name}</h1>
-            <p className="muted">{reservation.reservationDate.toISOString().slice(0, 10)} · {reservation.reservationTime} · {reservation.area ?? "Sin área"}</p>
+            <p className="muted">{reservation.reservationDate.toISOString().slice(0, 10)} · {reservation.reservationTime} · {reservation.location.shortName} · {reservation.area ?? "Sin área"}</p>
           </div>
           <span className={`status-pill status-${reservation.status.toLowerCase()}`}>{STATUS_LABELS[reservation.status]}</span>
         </div>
 
-        {successMessage ? <p className="notice">{successMessage}</p> : null}
+        {statusOutcome ? <StatusOutcomeNotice {...statusOutcome} /> : null}
+        {successMessage && !STATUS_OUTCOME_OK_KEYS.has(query.ok ?? "") ? <p className="notice">{successMessage}</p> : null}
         {errorMessage ? <p className="notice error">{errorMessage}</p> : null}
         {reservation.emailError ? <p className="notice error">Confirmada, pero falló el email: {reservation.emailError}</p> : null}
 
@@ -120,6 +221,8 @@ export default async function ReservationDetailPage({ params, searchParams }: Re
 
         <dl className="grid two">
           <div><dt>Estado</dt><dd>{STATUS_LABELS[reservation.status]}</dd></div>
+          <div><dt>Sede</dt><dd>{reservation.location.reservationLabel}</dd></div>
+          <div><dt>Dirección sede</dt><dd>{reservation.location.address ?? "-"}</dd></div>
           <div><dt>Personas</dt><dd>{reservation.partySize}</dd></div>
           <div><dt>Origen</dt><dd>{RESERVATION_SOURCE_LABELS[reservation.source] ?? reservation.source}</dd></div>
           <div><dt>Idioma del cliente</dt><dd>{CUSTOMER_LANGUAGE_LABELS[customerLanguage]}</dd></div>
@@ -147,17 +250,16 @@ export default async function ReservationDetailPage({ params, searchParams }: Re
               </form>
             ) : null}
             {canReject ? (
-              <form action={rejectReservationAction}>
+              <form action={rejectReservationAction} className="action-form">
                 <input type="hidden" name="reservationId" value={reservation.id} />
-                <label>Motivo del rechazo (opcional)
-                  <input name="reason" placeholder="Ej: Agenda completa, cliente frecuente cancela siempre..." />
-                </label>
-                <button className="danger" type="submit">Rechazar</button>
+                <ReservationReasonPicker variant="reject" />
+                <button className="danger" type="submit">Rechazar reserva</button>
               </form>
             ) : null}
             {canCancel ? (
-              <form action={cancelReservationAction}>
+              <form action={cancelReservationAction} className="action-form">
                 <input type="hidden" name="reservationId" value={reservation.id} />
+                <ReservationReasonPicker variant="cancel" />
                 <button className="secondary" type="submit">Cancelar reserva</button>
               </form>
             ) : null}

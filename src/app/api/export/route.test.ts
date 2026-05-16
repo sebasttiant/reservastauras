@@ -100,7 +100,7 @@ describe("GET /api/export — filter validation", () => {
     expect(args?.where?.status).toBe("CONFIRMED");
   });
 
-  it("forwards `q` into a Prisma OR clause across name/email/phone/area", async () => {
+  it("forwards `q` into a Prisma OR clause across customer/location/area fields", async () => {
     const { GET } = await import("@/app/api/export/route");
     const res = await GET(new Request("http://localhost/api/export?format=json&q=Laura"));
     expect(res.status).toBe(200);
@@ -109,6 +109,9 @@ describe("GET /api/export — filter validation", () => {
       { user: { name: { contains: "Laura", mode: "insensitive" } } },
       { user: { email: { contains: "Laura", mode: "insensitive" } } },
       { user: { phone: { contains: "Laura", mode: "insensitive" } } },
+      { location: { name: { contains: "Laura", mode: "insensitive" } } },
+      { location: { shortName: { contains: "Laura", mode: "insensitive" } } },
+      { location: { reservationLabel: { contains: "Laura", mode: "insensitive" } } },
       { area: { contains: "Laura", mode: "insensitive" } },
     ]);
   });

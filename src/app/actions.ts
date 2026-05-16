@@ -15,6 +15,7 @@ import {
   type PublicLanguage,
 } from "@/lib/i18n/language";
 import { canTransitionReservation } from "@/lib/reservations/state";
+import { resolveActiveLocationById, resolveActiveLocationBySlug } from "@/lib/reservations/locations";
 import { createAdminSchema, formDataToRecord, loginSchema, manualReservationSchema, reservationRequestSchema, toggleAdminSchema } from "@/lib/validation";
 import { requireAdmin, requireSuperAdmin, signInAdmin, signOutAdmin } from "@/lib/auth";
 import { getClientIp } from "@/lib/auth/client-ip";
@@ -96,6 +97,9 @@ export async function createReservationAction(formData: FormData): Promise<void>
   if (!parsed.success) redirectPublicWithError(requestedLanguage, "invalid-data");
 
   const input = parsed.data;
+  const location = await resolveActiveLocationBySlug(input.locationSlug);
+  if (!location) redirectPublicWithError(requestedLanguage, "invalid-data");
+
   const user = await prisma.user.upsert({
     where: { email: input.email },
     update: { name: input.name, phone: normalizeOptionalText(input.phone) },
@@ -105,6 +109,7 @@ export async function createReservationAction(formData: FormData): Promise<void>
   await prisma.reservation.create({
     data: {
       userId: user.id,
+      locationId: location.id,
       reservationDate: toDateOnly(input.reservationDate),
       reservationTime: input.reservationTime,
       area: normalizeOptionalText(input.area),
@@ -212,6 +217,9 @@ export async function createManualReservationAction(formData: FormData): Promise
   if (!parsed.success) redirectWithError("/admin/reservations/new", "invalid-data");
 
   const input = parsed.data;
+  const location = await resolveActiveLocationById(input.locationId);
+  if (!location) redirectWithError("/admin/reservations/new", "invalid-data");
+
   const user = await prisma.user.upsert({
     where: { email: input.email },
     update: { name: input.name, phone: normalizeOptionalText(input.phone) },
@@ -222,6 +230,7 @@ export async function createManualReservationAction(formData: FormData): Promise
   const reservation = await prisma.reservation.create({
     data: {
       userId: user.id,
+      locationId: location.id,
       reservationDate: toDateOnly(input.reservationDate),
       reservationTime: input.reservationTime,
       area: normalizeOptionalText(input.area),
@@ -283,12 +292,33 @@ type ConfirmFailure =
   | { kind: "concurrent-update" };
 
 type ConfirmOutcome =
-  | { ok: true; reservation: Prisma.ReservationGetPayload<{ include: { user: true } }> }
+  | { ok: true; reservation: Prisma.ReservationGetPayload<{ include: { user: true; location: true } }> }
   | { ok: false; failure: ConfirmFailure };
+
+type StatusChangeFailure =
+  | { kind: "not-found" }
+  | { kind: "invalid-state" }
+  | { kind: "concurrent-update" };
+
+type StatusChangeOutcome =
+  | { ok: true; reservation: Prisma.ReservationGetPayload<{ include: { user: true; location: true } }> }
+  | { ok: false; failure: StatusChangeFailure };
 
 const CONFIRM_ERROR_KEYS: Record<ConfirmFailure["kind"], string> = {
   "not-found": "not-found",
   "invalid-state": "invalid-state-confirm",
+  "concurrent-update": "concurrent-update",
+};
+
+const REJECT_ERROR_KEYS: Record<StatusChangeFailure["kind"], string> = {
+  "not-found": "not-found",
+  "invalid-state": "invalid-state-reject",
+  "concurrent-update": "concurrent-update",
+};
+
+const CANCEL_ERROR_KEYS: Record<StatusChangeFailure["kind"], string> = {
+  "not-found": "not-found",
+  "invalid-state": "invalid-state-cancel",
   "concurrent-update": "concurrent-update",
 };
 
@@ -316,7 +346,7 @@ export async function confirmReservationAction(formData: FormData): Promise<void
             confirmedById: admin.adminId,
             emailError: null,
           },
-          include: { user: true },
+          include: { user: true, location: true },
         });
         return { ok: true, reservation: updated };
       },
@@ -360,6 +390,7 @@ export async function confirmReservationAction(formData: FormData): Promise<void
       reservationDate: confirmed.reservationDate,
       reservationTime: confirmed.reservationTime,
       area: confirmed.area,
+      location: confirmed.location,
       confirmedByName: admin.name,
       confirmedByEmail: admin.email,
       language: parsePublicLanguage(confirmed.customerLanguage),
@@ -400,7 +431,7 @@ export async function resendConfirmationEmailAction(formData: FormData): Promise
 
   const reservation = await prisma.reservation.findUnique({
     where: { id: reservationId },
-    include: { user: true, confirmedBy: true },
+    include: { user: true, confirmedBy: true, location: true },
   });
 
   if (!reservation) {
@@ -426,6 +457,7 @@ export async function resendConfirmationEmailAction(formData: FormData): Promise
       reservationDate: reservation.reservationDate,
       reservationTime: reservation.reservationTime,
       area: reservation.area,
+      location: reservation.location,
       confirmedByName: responsibleName,
       confirmedByEmail: responsibleEmail,
       language: parsePublicLanguage(reservation.customerLanguage),
@@ -476,40 +508,68 @@ export async function rejectReservationAction(formData: FormData): Promise<void>
   const admin = await requireAdmin();
   const requestHeaders = await requireValidAdminMutationRequest("/admin");
   const reservationId = String(formData.get("reservationId") ?? "");
-  const reason = String(formData.get("reason") ?? "").trim() || undefined;
+  const reason = normalizeOptionalText(String(formData.get("reason") ?? ""));
   if (!reservationId) redirectWithError("/admin", "invalid-reservation");
 
-  const reservation = await prisma.reservation.findUnique({
-    where: { id: reservationId },
-    include: { user: true },
-  });
-  if (!reservation || !canTransitionReservation(reservation.status, RESERVATION_STATUS.REJECTED)) {
-    redirectWithError(`/admin/reservations/${reservationId}`, "invalid-state-reject");
+  let outcome: StatusChangeOutcome;
+  try {
+    outcome = await prisma.$transaction(
+      async (tx): Promise<StatusChangeOutcome> => {
+        const reservation = await tx.reservation.findUnique({ where: { id: reservationId } });
+        if (!reservation) return { ok: false, failure: { kind: "not-found" } };
+        if (!canTransitionReservation(reservation.status, RESERVATION_STATUS.REJECTED)) {
+          return { ok: false, failure: { kind: "invalid-state" } };
+        }
+
+        const updated = await tx.reservation.update({
+          where: { id: reservationId },
+          data: {
+            status: RESERVATION_STATUS.REJECTED,
+            rejectedAt: new Date(),
+            rejectedById: admin.adminId,
+            rejectionReason: reason,
+            notes: reason ? `RECHAZO: ${reason}\n\n${reservation.notes ?? ""}` : reservation.notes,
+            emailError: null,
+          },
+          include: { user: true, location: true },
+        });
+        return { ok: true, reservation: updated };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  } catch (error: unknown) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034") {
+      outcome = { ok: false, failure: { kind: "concurrent-update" } };
+    } else {
+      throw error;
+    }
   }
 
-  await prisma.reservation.update({
-    where: { id: reservationId },
-    data: { status: RESERVATION_STATUS.REJECTED, rejectedAt: new Date(), notes: reason ? `RECHAZO: ${reason}\n\n${reservation.notes ?? ""}` : reservation.notes },
-  });
+  if (!outcome.ok) {
+    redirectWithError(`/admin/reservations/${reservationId}`, REJECT_ERROR_KEYS[outcome.failure.kind]);
+  }
+
+  const rejected = outcome.reservation;
 
   await recordAuditLog({
     event: AUDIT_EVENT.RESERVATION_REJECTED,
     actor: admin,
     request: getRequestSecurityContext(requestHeaders),
     resourceType: "RESERVATION",
-    resourceId: reservationId,
-    metadata: { hasReason: Boolean(reason) },
+    resourceId: rejected.id,
+    metadata: { hasReason: Boolean(reason), rejectedById: admin.adminId },
   });
 
   try {
     await sendReservationRejectionEmail({
-      to: reservation.user.email,
-      name: reservation.user.name,
-      reservationDate: reservation.reservationDate,
-      reservationTime: reservation.reservationTime,
-      area: reservation.area,
-      reason: reason,
-      language: parsePublicLanguage(reservation.customerLanguage),
+      to: rejected.user.email,
+      name: rejected.user.name,
+      reservationDate: rejected.reservationDate,
+      reservationTime: rejected.reservationTime,
+      area: rejected.area,
+      location: rejected.location,
+      reason: reason ?? undefined,
+      language: parsePublicLanguage(rejected.customerLanguage),
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error desconocido al enviar email.";
@@ -525,37 +585,66 @@ export async function cancelReservationAction(formData: FormData): Promise<void>
   const admin = await requireAdmin();
   const requestHeaders = await requireValidAdminMutationRequest("/admin");
   const reservationId = String(formData.get("reservationId") ?? "");
+  const reason = normalizeOptionalText(String(formData.get("reason") ?? ""));
   if (!reservationId) redirectWithError("/admin", "invalid-reservation");
 
-  const reservation = await prisma.reservation.findUnique({
-    where: { id: reservationId },
-    include: { user: true },
-  });
-  if (!reservation || !canTransitionReservation(reservation.status, RESERVATION_STATUS.CANCELLED)) {
-    redirectWithError(`/admin/reservations/${reservationId}`, "invalid-state-cancel");
+  let outcome: StatusChangeOutcome;
+  try {
+    outcome = await prisma.$transaction(
+      async (tx): Promise<StatusChangeOutcome> => {
+        const reservation = await tx.reservation.findUnique({ where: { id: reservationId } });
+        if (!reservation) return { ok: false, failure: { kind: "not-found" } };
+        if (!canTransitionReservation(reservation.status, RESERVATION_STATUS.CANCELLED)) {
+          return { ok: false, failure: { kind: "invalid-state" } };
+        }
+
+        const updated = await tx.reservation.update({
+          where: { id: reservationId },
+          data: {
+            status: RESERVATION_STATUS.CANCELLED,
+            cancelledAt: new Date(),
+            cancelledById: admin.adminId,
+            cancellationReason: reason,
+            emailError: null,
+          },
+          include: { user: true, location: true },
+        });
+        return { ok: true, reservation: updated };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  } catch (error: unknown) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034") {
+      outcome = { ok: false, failure: { kind: "concurrent-update" } };
+    } else {
+      throw error;
+    }
   }
 
-  await prisma.reservation.update({
-    where: { id: reservationId },
-    data: { status: RESERVATION_STATUS.CANCELLED, cancelledAt: new Date() },
-  });
+  if (!outcome.ok) {
+    redirectWithError(`/admin/reservations/${reservationId}`, CANCEL_ERROR_KEYS[outcome.failure.kind]);
+  }
+
+  const cancelled = outcome.reservation;
 
   await recordAuditLog({
     event: AUDIT_EVENT.RESERVATION_CANCELLED,
     actor: admin,
     request: getRequestSecurityContext(requestHeaders),
     resourceType: "RESERVATION",
-    resourceId: reservationId,
+    resourceId: cancelled.id,
+    metadata: { hasReason: Boolean(reason), cancelledById: admin.adminId },
   });
 
   try {
     await sendReservationCancellationEmail({
-      to: reservation.user.email,
-      name: reservation.user.name,
-      reservationDate: reservation.reservationDate,
-      reservationTime: reservation.reservationTime,
-      area: reservation.area,
-      language: parsePublicLanguage(reservation.customerLanguage),
+      to: cancelled.user.email,
+      name: cancelled.user.name,
+      reservationDate: cancelled.reservationDate,
+      reservationTime: cancelled.reservationTime,
+      area: cancelled.area,
+      location: cancelled.location,
+      language: parsePublicLanguage(cancelled.customerLanguage),
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error desconocido al enviar email.";

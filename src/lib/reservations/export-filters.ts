@@ -104,6 +104,7 @@ type StringFilter = { contains: string; mode: "insensitive" };
 
 interface ReservationOrCondition {
   user?: { name?: StringFilter; email?: StringFilter; phone?: StringFilter };
+  location?: { name?: StringFilter; shortName?: StringFilter; reservationLabel?: StringFilter };
   area?: StringFilter;
 }
 
@@ -151,6 +152,9 @@ export function buildReservationWhere(filters: ExportFilters): ReservationWhereC
       { user: { name: { contains: filters.q, mode: "insensitive" } } },
       { user: { email: { contains: filters.q, mode: "insensitive" } } },
       { user: { phone: { contains: filters.q, mode: "insensitive" } } },
+      { location: { name: { contains: filters.q, mode: "insensitive" } } },
+      { location: { shortName: { contains: filters.q, mode: "insensitive" } } },
+      { location: { reservationLabel: { contains: filters.q, mode: "insensitive" } } },
       { area: { contains: filters.q, mode: "insensitive" } },
     ];
   }

@@ -28,6 +28,8 @@ model Admin {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   confirmed    Reservation[] @relation("ReservationConfirmedBy")
+  rejected     Reservation[] @relation("ReservationRejectedBy")
+  cancelled    Reservation[] @relation("ReservationCancelledBy")
   createdReservations Reservation[] @relation("ReservationCreatedBy")
   auditLogs    AuditLog[]
 }
@@ -41,10 +43,32 @@ model User {
   reservations Reservation[]
 }
 
+model Location {
+  id               String        @id @default(cuid())
+  slug             String        @unique
+  name             String
+  shortName        String
+  reservationLabel String
+  address          String?
+  phone            String?
+  whatsappUrl      String?
+  logoPath         String?
+  heroImagePath    String?
+  isActive         Boolean       @default(true)
+  sortOrder        Int           @default(0)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  reservations     Reservation[]
+
+  @@index([isActive, sortOrder])
+}
+
 model Reservation {
   id              String            @id @default(cuid())
   userId          String
   user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  locationId      String
+  location        Location          @relation(fields: [locationId], references: [id])
   reservationDate DateTime          @db.Date
   reservationTime String
   area            String?
@@ -59,15 +83,24 @@ model Reservation {
   confirmedById   String?
   confirmedBy     Admin?            @relation("ReservationConfirmedBy", fields: [confirmedById], references: [id])
   rejectedAt      DateTime?
+  rejectedById    String?
+  rejectedBy      Admin?            @relation("ReservationRejectedBy", fields: [rejectedById], references: [id], onDelete: SetNull)
+  rejectionReason String?
   cancelledAt     DateTime?
+  cancelledById   String?
+  cancelledBy     Admin?            @relation("ReservationCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  cancellationReason String?
   emailError      String?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
   @@index([status, reservationDate, reservationTime])
+  @@index([locationId, reservationDate, reservationTime])
   @@index([area])
   @@index([source])
   @@index([createdByAdminId])
+  @@index([rejectedById])
+  @@index([cancelledById])
 }
 
 model LoginAttempt {

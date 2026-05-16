@@ -11,8 +11,12 @@ import type { PublicLanguage } from "@/lib/i18n/language";
 export interface ReservationEmailLabels {
   date: string;
   time: string;
+  location: string;
   area: string;
   areaTbd: string;
+  address: string;
+  phone: string;
+  whatsapp: string;
   confirmedBy: string;
   reason: string;
 }
@@ -50,8 +54,12 @@ export const RESERVATION_EMAIL_COPY: Record<PublicLanguage, ReservationEmailCopy
     labels: {
       date: "Fecha",
       time: "Hora",
+      location: "Sede",
       area: "Sector",
       areaTbd: "A designar",
+      address: "Dirección",
+      phone: "Teléfono",
+      whatsapp: "WhatsApp",
       confirmedBy: "Confirmado por",
       reason: "Motivo",
     },
@@ -82,8 +90,12 @@ export const RESERVATION_EMAIL_COPY: Record<PublicLanguage, ReservationEmailCopy
     labels: {
       date: "Date",
       time: "Time",
+      location: "Location",
       area: "Area",
       areaTbd: "To be assigned",
+      address: "Address",
+      phone: "Phone",
+      whatsapp: "WhatsApp",
       confirmedBy: "Confirmed by",
       reason: "Reason",
     },

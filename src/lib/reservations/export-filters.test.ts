@@ -134,14 +134,16 @@ describe("buildReservationWhere", () => {
     expect(where.reservationDate?.lte?.toISOString()).toBe("2026-05-08T23:59:59.999Z");
   });
 
-  it("forwards `q` as a Prisma OR over name/email/phone/area, all case-insensitive", () => {
+  it("forwards `q` as a Prisma OR over customer/location/area fields, all case-insensitive", () => {
     const where = buildReservationWhere({ format: "xlsx", q: "Laura" });
     expect(where.OR).toBeDefined();
-    expect(where.OR).toHaveLength(4);
     expect(where.OR).toEqual([
       { user: { name: { contains: "Laura", mode: "insensitive" } } },
       { user: { email: { contains: "Laura", mode: "insensitive" } } },
       { user: { phone: { contains: "Laura", mode: "insensitive" } } },
+      { location: { name: { contains: "Laura", mode: "insensitive" } } },
+      { location: { shortName: { contains: "Laura", mode: "insensitive" } } },
+      { location: { reservationLabel: { contains: "Laura", mode: "insensitive" } } },
       { area: { contains: "Laura", mode: "insensitive" } },
     ]);
   });
