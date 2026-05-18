@@ -41,7 +41,7 @@
     "zod": "4.4.2"
   },
   "devDependencies": {
-    "@playwright/test": "1.59.1",
+    "@playwright/test": "1.60.0",
     "@types/node": "24.12.2",
     "@types/nodemailer": "8.0.0",
     "@types/pg": "8.20.0",
@@ -49,9 +49,9 @@
     "@types/react-dom": "19.2.3",
     "eslint": "9.39.4",
     "eslint-config-next": "16.2.6",
-    "tsx": "4.21.0",
+    "tsx": "4.22.2",
     "typescript": "5.9.3",
-    "vitest": "4.1.5"
+    "vitest": "4.1.6"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
