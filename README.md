@@ -120,6 +120,10 @@ La migración `000007_manual_reservations` agrega soporte deploy-safe para reser
 
 La guía de upgrades controlados, Docker-first y CI está en [`docs/maintenance.md`](docs/maintenance.md).
 
+## Seguridad
+
+Ver [SECURITY.md](SECURITY.md) para la postura de seguridad, defaults de red y recomendaciones de producción.
+
 ## Riesgos conocidos
 
 - Durante implementación local no se ejecuta `next build` por restricción explícita; CI sí valida build antes de merge.

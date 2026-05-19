@@ -65,7 +65,9 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "3000:3000"
+      # Bind a localhost: el host (nginx/Caddy) expone al exterior con TLS.
+      # Nunca exponer 0.0.0.0:3000 directo a internet en producción.
+      - "127.0.0.1:3000:3000"
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
