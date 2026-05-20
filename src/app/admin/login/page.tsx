@@ -21,8 +21,8 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         </div>
         {errorMessage ? <p className="notice error">{errorMessage}</p> : null}
         <form action={loginAction} className="grid">
-          <label>Email<input name="email" type="email" required placeholder="admin@tauras.com" /></label>
-          <label>Contraseña<input name="password" type="password" required minLength={8} placeholder="Tu contraseña segura" /></label>
+          <label>Email<input name="email" type="email" autoComplete="username" required placeholder="admin@tauras.com" /></label>
+          <label>Contraseña<input name="password" type="password" autoComplete="current-password" required minLength={8} placeholder="Tu contraseña segura" /></label>
           <button type="submit">Iniciar sesión</button>
         </form>
       </section>

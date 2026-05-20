@@ -205,9 +205,9 @@ export async function PublicReservationPage({ searchParams }: PublicReservationP
                     {copy.form.name}
                     <span className="field-hint-inline">{copy.form.nameHint}</span>
                   </span>
-                  <input name="name" required minLength={2} placeholder={copy.form.namePlaceholder} />
+                  <input name="name" autoComplete="name" required minLength={2} placeholder={copy.form.namePlaceholder} />
                 </label>
-                <label>{copy.form.email}<input name="email" type="email" required placeholder={copy.form.emailPlaceholder} /></label>
+                <label>{copy.form.email}<input name="email" type="email" autoComplete="email" required placeholder={copy.form.emailPlaceholder} /></label>
                 <label>{copy.form.country}
                   <select name="country" defaultValue="Colombia (+57)" required>
                     {copy.countries.map((country) => <option key={country.value} value={country.value}>{country.label}</option>)}
@@ -218,7 +218,7 @@ export async function PublicReservationPage({ searchParams }: PublicReservationP
                     {copy.form.phone}
                     <span className="field-hint-inline">{copy.form.phoneHint}</span>
                   </span>
-                  <input name="phone" inputMode="tel" pattern="[0-9+()\s-]{7,25}" required placeholder={copy.form.phonePlaceholder} title={copy.form.phoneTitle} />
+                  <input name="phone" type="tel" autoComplete="tel" inputMode="tel" pattern="[0-9+()\s-]{7,25}" required placeholder={copy.form.phonePlaceholder} title={copy.form.phoneTitle} />
                 </label>
               </div>
               <label>{copy.form.notes}
