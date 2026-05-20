@@ -3,6 +3,7 @@ import { createManualReservationAction } from "@/app/actions";
 import { RESERVATION_SOURCE, RESERVATION_STATUS } from "@/lib/constants";
 import { requireAdmin } from "@/lib/auth";
 import { MANUAL_RESERVATION_ERROR_MESSAGES, lookupMessage } from "@/lib/messages";
+import { getBusinessTodayDateString } from "@/lib/reservations/business-date";
 import { getActiveReservationLocations } from "@/lib/reservations/locations";
 
 interface NewReservationPageProps {
@@ -35,6 +36,7 @@ export default async function NewReservationPage({ searchParams }: NewReservatio
   const params = await searchParams;
   const locations = await getActiveReservationLocations();
   const errorMessage = lookupMessage(MANUAL_RESERVATION_ERROR_MESSAGES, params.error);
+  const minimumReservationDate = getBusinessTodayDateString();
 
   return (
     <main className="admin-shell">
@@ -69,7 +71,7 @@ export default async function NewReservationPage({ searchParams }: NewReservatio
                 ))}
               </select>
             </label>
-            <label>Fecha<input name="reservationDate" type="date" required /></label>
+            <label>Fecha<input name="reservationDate" type="date" min={minimumReservationDate} required /></label>
             <label>Hora
               <select name="reservationTime" required defaultValue="">
                 <option value="" disabled>Elegí un horario</option>
