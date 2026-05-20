@@ -16,6 +16,8 @@ interface ReservationDetailPageProps {
   searchParams: Promise<Record<string, string | undefined>>;
 }
 
+export const metadata = { title: "Detalle de reserva · Reservas Tauras" };
+
 const SUCCESS_MESSAGES: Record<string, string> = {
   confirmed: "La reserva fue confirmada correctamente. Si el email tuvo algún problema, lo vas a ver debajo.",
   "manual-created": "La reserva fue cargada manualmente. No se envió email automático al cliente.",
