@@ -511,37 +511,34 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   overflow: hidden;
 }
 
-.location-preview {
-  position: relative;
+.zone-preview {
   margin: 0;
-  width: 100%;
-  aspect-ratio: 16 / 9;
   border: 1px solid var(--border);
   border-radius: 14px;
   overflow: hidden;
+}
+
+.zone-preview-card {
+  display: grid;
+  gap: 6px;
+  padding: 20px 16px;
+  text-align: center;
   background:
     radial-gradient(120% 80% at 50% 0%, rgba(255, 193, 7, .14), transparent 60%),
     var(--card-soft);
 }
 
-.location-preview img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
+.zone-preview-name {
+  font-size: 1.05rem;
+  font-weight: 900;
+  color: var(--brand);
 }
 
-.location-preview-fallback {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 14px;
-  text-align: center;
+.zone-preview-fallback {
+  font-size: .85rem;
   color: var(--muted);
-  font-size: .9rem;
-  font-weight: 700;
-  letter-spacing: .01em;
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 .area-field-hint {
@@ -778,6 +775,5 @@ dd { margin: 4px 0 0; }
   .location-selector { padding: 14px; gap: 12px; }
   .location-cards { grid-template-columns: 1fr; }
   .location-card { padding: 10px 12px; }
-  .location-preview { aspect-ratio: 4 / 3; }
   .area-field-hint { font-size: .64rem; }
 }

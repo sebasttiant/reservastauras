@@ -1,19 +1,6 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element --
-   UI skeleton: usamos <img> plano con loading="lazy" porque todavía no hay
-   pipeline de assets ni dominios configurados para next/image. OpenCode
-   puede migrar a <Image> al conectar el modelo real de sedes. */
-/**
- * Selector de sede del formulario público de reservas.
- *
- * - Debe renderizarse DENTRO del <form> para que el radio emita
- *   `locationSlug` al FormData del server action.
- * - No reemplaza el campo `area` (zona/ambiente); es independiente.
- * - Los datos de sedes llegan por prop desde sedes activas reales.
- */
-
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 export interface PublicLocation {
   id: string;
@@ -21,8 +8,6 @@ export interface PublicLocation {
   name: string;
   description: string;
   logoSrc?: string;
-  previewSrc?: string;
-  previewAlt?: string;
 }
 
 interface LocationSelectorCopy {
@@ -31,8 +16,6 @@ interface LocationSelectorCopy {
   description: string;
   ariaLabel: string;
   demoBadge: string;
-  previewAlt: string;
-  previewFallback: string;
 }
 
 interface LocationSelectorProps {
@@ -46,9 +29,6 @@ export function LocationSelector({
   locations,
   isDemo = false,
 }: LocationSelectorProps): ReactNode {
-  const [selectedSlug, setSelectedSlug] = useState("");
-  const selectedLocation = locations.find((location) => location.slug === selectedSlug);
-
   return (
     <section className="location-selector" aria-label={copy.ariaLabel}>
       <header className="location-selector-heading">
@@ -70,7 +50,6 @@ export function LocationSelector({
               required
               className="location-card-input"
               aria-label={location.name}
-              onChange={() => setSelectedSlug(location.slug)}
             />
             <span className="location-card-logo" aria-hidden="true">
               {location.logoSrc ? (
@@ -88,21 +67,6 @@ export function LocationSelector({
           </label>
         ))}
       </div>
-
-      <figure className="location-preview" aria-live="polite">
-        {selectedLocation?.previewSrc ? (
-          <img
-            src={selectedLocation.previewSrc}
-            alt={selectedLocation.previewAlt ?? copy.previewAlt}
-            loading="lazy"
-            decoding="async"
-          />
-        ) : (
-          <figcaption className="location-preview-fallback">
-            {copy.previewFallback}
-          </figcaption>
-        )}
-      </figure>
     </section>
   );
 }
