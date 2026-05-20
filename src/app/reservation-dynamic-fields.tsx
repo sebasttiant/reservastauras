@@ -47,11 +47,10 @@ export function ReservationDynamicFields({
   const singleArea = areas.length === 1 ? areas[0] : null;
   const firstArea = areas[0] ?? null;
 
-  const [selectedArea, setSelectedArea] = useState(firstArea?.value ?? "");
-
-  useEffect(() => {
-    setSelectedArea(firstArea?.value ?? "");
-  }, [selectedSlug]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [areaSelection, setAreaSelection] = useState({ slug: defaultLocationSlug, area: "" });
+  const selectedArea = areaSelection.slug === selectedSlug
+    ? areaSelection.area
+    : firstArea?.value ?? "";
 
   const selectedAreaLabel = singleArea
     ? singleArea.label
@@ -73,7 +72,7 @@ export function ReservationDynamicFields({
           <select
             name="area"
             value={selectedArea}
-            onChange={(e) => setSelectedArea(e.target.value)}
+            onChange={(e) => setAreaSelection({ slug: selectedSlug, area: e.target.value })}
           >
             {areas.map((opt) => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>

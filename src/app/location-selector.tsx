@@ -1,5 +1,10 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element --
+   El logo de la sede viene del modelo actual como ruta pública simple. No es
+   contenido principal ni preview de zona; cuando tengamos pipeline de assets,
+   puede migrarse a next/image junto con las fotos reales de ambientes. */
+
 import type { ReactNode } from "react";
 
 export interface PublicLocation {
