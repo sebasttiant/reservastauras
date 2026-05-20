@@ -23,6 +23,11 @@ import { checkLoginAllowed, normalizeEmailKey, recordLoginAttempt } from "@/lib/
 import { checkReservationRateLimit } from "@/lib/auth/reservation-rate-limit";
 import { AUDIT_EVENT, recordAuditLog } from "@/lib/audit";
 import { getRequestSecurityContext, isValidAdminMutationOrigin } from "@/lib/security/request";
+import {
+  isLocationAreaAllowed,
+  isLocationOpenOnDate,
+  isLocationTimeAllowed,
+} from "@/lib/reservations/location-config";
 
 function toDateOnly(value: string): Date {
   return new Date(`${value}T00:00:00.000Z`);
@@ -99,6 +104,14 @@ export async function createReservationAction(formData: FormData): Promise<void>
   const input = parsed.data;
   const location = await resolveActiveLocationBySlug(input.locationSlug);
   if (!location) redirectPublicWithError(requestedLanguage, "invalid-data");
+
+  if (
+    !isLocationAreaAllowed(input.locationSlug, input.area) ||
+    !isLocationTimeAllowed(input.locationSlug, input.reservationTime) ||
+    !isLocationOpenOnDate(input.locationSlug, input.reservationDate)
+  ) {
+    redirectPublicWithError(requestedLanguage, "invalid-data");
+  }
 
   const user = await prisma.user.upsert({
     where: { email: input.email },

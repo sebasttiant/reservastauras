@@ -1,4 +1,5 @@
 import { DEFAULT_PUBLIC_LANGUAGE, PUBLIC_LANGUAGES, parsePublicLanguage } from "@/lib/i18n/language";
+import { DEFAULT_LOCATION_SLUG, LOCATION_AREA_VALUES, LOCATION_SLUGS } from "@/lib/reservations/location-config";
 import type { PublicLanguage } from "@/lib/i18n/language";
 
 interface PublicOptionCopy {
@@ -66,6 +67,11 @@ interface PublicReservationLocationsCopy {
   areaHint: string;
 }
 
+interface LocationEntryCopy {
+  description: string;
+  hours: string;
+}
+
 export interface PublicReservationCopy {
   brandKicker: string;
   hero: PublicReservationHeroCopy;
@@ -74,17 +80,10 @@ export interface PublicReservationCopy {
   language: PublicReservationLanguageCopy;
   messages: PublicReservationMessagesCopy;
   locations: PublicReservationLocationsCopy;
-  areaOptions: readonly PublicOptionCopy[];
+  locationEntries: Record<string, LocationEntryCopy>;
   reasonOptions: readonly PublicOptionCopy[];
   countries: readonly PublicOptionCopy[];
 }
-
-const AREA_VALUES = [
-  "Cualquier Mesa Disponible",
-  "Terraza",
-  "Tauras Bar & Lounge",
-  "Salón Sofá",
-] as const;
 
 const REASON_VALUES = ["Ocasional", "Cumpleaños", "Cita", "Aniversario", "Negocios"] as const;
 
@@ -97,18 +96,33 @@ const COUNTRY_VALUES = [
   "Reino Unido (+44)", "Alemania (+49)", "Italia (+39)", "Portugal (+351)",
 ] as const;
 
-const SPANISH_AREA_LABELS = AREA_VALUES;
-
-const ENGLISH_AREA_LABELS = [
-  "Any available table",
-  "Terrace",
-  "Tauras Bar & Lounge",
-  "Sofa Room",
-] as const;
-
 const SPANISH_REASON_LABELS = REASON_VALUES;
 
 const ENGLISH_REASON_LABELS = ["Casual", "Birthday", "Date", "Anniversary", "Business"] as const;
+
+const LOCATION_AREA_ENGLISH_LABELS: Record<string, readonly string[]> = {
+  [LOCATION_SLUGS.STEAKHOUSE]: [
+    "Any available table", "Terrace", "Hallway", "Patio", "Bar",
+  ],
+  [LOCATION_SLUGS.BAR_LOUNGE]: [
+    "Tauras Bar & Lounge",
+  ],
+  [LOCATION_SLUGS.TEX_MEX]: [
+    "Any available table", "Terrace", "Hallway", "Dining Room", "Bar",
+  ],
+} as const;
+
+export function getLocationAreaOptions(slug: string, language: PublicLanguage): readonly PublicOptionCopy[] {
+  const values = LOCATION_AREA_VALUES[slug] ?? LOCATION_AREA_VALUES[DEFAULT_LOCATION_SLUG];
+  if (language === "es") {
+    return values.map((value) => ({ value, label: value }));
+  }
+  const englishLabels = LOCATION_AREA_ENGLISH_LABELS[slug] ?? values;
+  return values.map((value, index) => ({
+    value,
+    label: englishLabels[index] ?? value,
+  }));
+}
 
 function buildOptions<TValue extends readonly string[], TLabel extends readonly string[]>(
   values: TValue,
@@ -180,7 +194,20 @@ export const PUBLIC_RESERVATION_COPY: Record<PublicLanguage, PublicReservationCo
       previewFallback: "Vista de la sede próximamente",
       areaHint: "según sede",
     },
-    areaOptions: buildOptions(AREA_VALUES, SPANISH_AREA_LABELS),
+    locationEntries: {
+      [LOCATION_SLUGS.STEAKHOUSE]: {
+        description: "El Poblado",
+        hours: "Lunes a Domingo · 11:00 a.m. a 9:00 p.m.",
+      },
+      [LOCATION_SLUGS.BAR_LOUNGE]: {
+        description: "El Poblado (piso 2)",
+        hours: "Lunes a Domingo · 11:00 a.m. a 9:00 p.m.",
+      },
+      [LOCATION_SLUGS.TEX_MEX]: {
+        description: "Las Palmas, Mall Indiana",
+        hours: "Miércoles a Domingo · 12:00 p.m. a 5:00 p.m.",
+      },
+    },
     reasonOptions: buildOptions(REASON_VALUES, SPANISH_REASON_LABELS),
     countries: buildCountryOptions(),
   },
@@ -242,7 +269,20 @@ export const PUBLIC_RESERVATION_COPY: Record<PublicLanguage, PublicReservationCo
       previewFallback: "Location preview coming soon",
       areaHint: "by location",
     },
-    areaOptions: buildOptions(AREA_VALUES, ENGLISH_AREA_LABELS),
+    locationEntries: {
+      [LOCATION_SLUGS.STEAKHOUSE]: {
+        description: "El Poblado",
+        hours: "Monday to Sunday · 11:00 a.m. to 9:00 p.m.",
+      },
+      [LOCATION_SLUGS.BAR_LOUNGE]: {
+        description: "El Poblado (2nd floor)",
+        hours: "Monday to Sunday · 11:00 a.m. to 9:00 p.m.",
+      },
+      [LOCATION_SLUGS.TEX_MEX]: {
+        description: "Las Palmas, Mall Indiana",
+        hours: "Wednesday to Sunday · 12:00 p.m. to 5:00 p.m.",
+      },
+    },
     reasonOptions: buildOptions(REASON_VALUES, ENGLISH_REASON_LABELS),
     countries: buildCountryOptions(),
   },

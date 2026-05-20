@@ -3,9 +3,11 @@ import {
   PUBLIC_RESERVATION_COPY,
   buildPublicLanguageHref,
   getPublicReservationCopy,
+  getLocationAreaOptions,
 } from "@/lib/i18n/public-reservation-dictionary";
+import { LOCATION_SLUGS } from "@/lib/reservations/location-config";
 
-const OPTION_GROUP_KEYS = ["areaOptions", "reasonOptions", "countries"] as const;
+const OPTION_GROUP_KEYS = ["reasonOptions", "countries"] as const;
 
 describe("public reservation dictionary", () => {
   it("keeps option groups in shape and cardinality parity across public languages", () => {
@@ -47,13 +49,9 @@ describe("public reservation dictionary", () => {
     expect(getPublicReservationCopy("en").form.partySizeHelp).toContain("children and babies");
   });
 
-  it("localizes visible area/reason labels while keeping canonical option values", () => {
+  it("localizes visible reason labels while keeping canonical option values", () => {
     const englishCopy = getPublicReservationCopy("en");
 
-    expect(englishCopy.areaOptions).toContainEqual({
-      value: "Cualquier Mesa Disponible",
-      label: "Any available table",
-    });
     expect(englishCopy.reasonOptions).toContainEqual({
       value: "Cumpleaños",
       label: "Birthday",
@@ -77,5 +75,77 @@ describe("public reservation dictionary", () => {
     expect(buildPublicLanguageHref("en")).toBe("/");
     expect(buildPublicLanguageHref("es")).toBe("/?lang=es");
     expect(buildPublicLanguageHref("foo")).toBe("/");
+  });
+
+  describe("per‑location area options", () => {
+    it("provides Steakhouse areas with correct values in Spanish", () => {
+      const options = getLocationAreaOptions(LOCATION_SLUGS.STEAKHOUSE, "es");
+      expect(options).toEqual([
+        { value: "Cualquier Mesa Disponible", label: "Cualquier Mesa Disponible" },
+        { value: "Terraza", label: "Terraza" },
+        { value: "Pasillo", label: "Pasillo" },
+        { value: "Patio", label: "Patio" },
+        { value: "Barra", label: "Barra" },
+      ]);
+    });
+
+    it("localizes Steakhouse area labels in English", () => {
+      const options = getLocationAreaOptions(LOCATION_SLUGS.STEAKHOUSE, "en");
+      expect(options).toContainEqual({ value: "Cualquier Mesa Disponible", label: "Any available table" });
+      expect(options).toContainEqual({ value: "Patio", label: "Patio" });
+      expect(options).toContainEqual({ value: "Barra", label: "Bar" });
+    });
+
+    it("returns a single area for Bar & Lounge", () => {
+      const esOptions = getLocationAreaOptions(LOCATION_SLUGS.BAR_LOUNGE, "es");
+      expect(esOptions).toHaveLength(1);
+      expect(esOptions[0]).toEqual({ value: "Tauras Bar & Lounge", label: "Tauras Bar & Lounge" });
+
+      const enOptions = getLocationAreaOptions(LOCATION_SLUGS.BAR_LOUNGE, "en");
+      expect(enOptions).toHaveLength(1);
+      expect(enOptions[0]).toEqual({ value: "Tauras Bar & Lounge", label: "Tauras Bar & Lounge" });
+    });
+
+    it("returns Tex Mex areas with Salón (accented) and no Patio", () => {
+      const options = getLocationAreaOptions(LOCATION_SLUGS.TEX_MEX, "es");
+      expect(options).toEqual([
+        { value: "Cualquier Mesa Disponible", label: "Cualquier Mesa Disponible" },
+        { value: "Terraza", label: "Terraza" },
+        { value: "Pasillo", label: "Pasillo" },
+        { value: "Salón", label: "Salón" },
+        { value: "Barra", label: "Barra" },
+      ]);
+    });
+
+    it("falls back to Steakhouse options for unknown slugs", () => {
+      const options = getLocationAreaOptions("unknown-slug", "es");
+      expect(options[0]?.value).toBe("Cualquier Mesa Disponible");
+      expect(options).toContainEqual({ value: "Patio", label: "Patio" });
+    });
+
+    it("preserves canonical value parity across languages per location", () => {
+      for (const slug of Object.values(LOCATION_SLUGS)) {
+        const esOptions = getLocationAreaOptions(slug, "es");
+        const enOptions = getLocationAreaOptions(slug, "en");
+        expect(enOptions).toHaveLength(esOptions.length);
+        esOptions.forEach((es, i) => {
+          expect(enOptions[i]?.value).toBe(es.value);
+        });
+      }
+    });
+  });
+
+  describe("per‑location entry copy", () => {
+    it("provides location descriptions and hours in Spanish", () => {
+      const es = PUBLIC_RESERVATION_COPY.es.locationEntries;
+      expect(es[LOCATION_SLUGS.STEAKHOUSE].description).toBe("El Poblado");
+      expect(es[LOCATION_SLUGS.TEX_MEX].hours).toContain("12:00 p.m.");
+    });
+
+    it("provides location descriptions and hours in English", () => {
+      const en = PUBLIC_RESERVATION_COPY.en.locationEntries;
+      expect(en[LOCATION_SLUGS.STEAKHOUSE].description).toBe("El Poblado");
+      expect(en[LOCATION_SLUGS.BAR_LOUNGE].description).toContain("2nd floor");
+    });
   });
 });
