@@ -1,27 +1,7 @@
 import { z } from "zod";
 import { ADMIN_ROLE, RESERVATION_SOURCE_VALUES, RESERVATION_STATUS } from "@/lib/constants";
 import { DEFAULT_PUBLIC_LANGUAGE, publicLanguageSchema } from "@/lib/i18n/language";
-
-// Zona horaria del negocio. Las reglas calendario (hoy/ayer/futuro) se
-// resuelven contra esta zona, no contra UTC ni la del proceso.
-const BUSINESS_TIMEZONE = "America/Bogota";
-
-const DATE_FORMATTER = new Intl.DateTimeFormat("en-CA", {
-  timeZone: BUSINESS_TIMEZONE,
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-});
-
-function businessTodayDateString(): string {
-  // en-CA produce siempre YYYY-MM-DD, comparable lexicográficamente.
-  return DATE_FORMATTER.format(new Date());
-}
-
-function isTodayOrLaterInBusinessZone(value: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  return value >= businessTodayDateString();
-}
+import { isTodayOrLaterInBusinessZone } from "@/lib/reservations/business-date";
 
 const dateOnlySchema = z
   .string()

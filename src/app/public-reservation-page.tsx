@@ -18,6 +18,7 @@ import {
 import type { PublicLanguage } from "@/lib/i18n/language";
 import { PUBLIC_ERROR_MESSAGES, lookupPublicMessage } from "@/lib/messages";
 import { getActiveReservationLocations } from "@/lib/reservations/locations";
+import { getBusinessTodayDateString } from "@/lib/reservations/business-date";
 import type { PublicReservationCopy } from "@/lib/i18n/public-reservation-dictionary";
 
 interface PublicReservationPageProps {
@@ -91,6 +92,7 @@ export async function PublicReservationPage({ searchParams }: PublicReservationP
   const areaOptionsByLocation = buildAreaOptionsByLocation(publicLanguage);
   const timeOptionsByLocation = buildTimeOptionsByLocation();
   const defaultLocationSlug = publicLocations.length > 0 ? publicLocations[0].slug : "tauras-default";
+  const minimumReservationDate = getBusinessTodayDateString();
 
   const successSummary = buildSuccessSummary(searchParams, publicLanguage);
 
@@ -192,7 +194,7 @@ export async function PublicReservationPage({ searchParams }: PublicReservationP
                   alertCopy={copy.form.partySizeHelp}
                   defaultValue={1}
                 />
-                <label>{copy.form.date}<input name="reservationDate" type="date" required /></label>
+                <label>{copy.form.date}<input name="reservationDate" type="date" min={minimumReservationDate} required /></label>
                 <label>{copy.form.reason}
                   <select name="reason" defaultValue="Ocasional" required>
                     {copy.reasonOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
