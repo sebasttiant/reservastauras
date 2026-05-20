@@ -1,6 +1,7 @@
 import { hash } from "bcryptjs";
 import { AdminRole, PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { LOCATION_AREA_VALUES } from "../src/lib/reservations/location-config";
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -73,7 +74,7 @@ async function main() {
   });
 
   for (const location of DEFAULT_LOCATIONS) {
-    await prisma.location.upsert({
+    const savedLocation = await prisma.location.upsert({
       where: { slug: location.slug },
       update: {
         name: location.name,
@@ -86,6 +87,15 @@ async function main() {
       },
       create: location,
     });
+
+    const areaValues = LOCATION_AREA_VALUES[location.slug] ?? [];
+    for (const areaValue of areaValues) {
+      await prisma.zone.upsert({
+        where: { locationId_areaValue: { locationId: savedLocation.id, areaValue } },
+        update: {},
+        create: { locationId: savedLocation.id, areaValue },
+      });
+    }
   }
 }
 

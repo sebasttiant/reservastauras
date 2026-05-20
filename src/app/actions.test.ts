@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   redirect: vi.fn(),
   headers: vi.fn(),
   requireAdmin: vi.fn(),
+  requireSuperAdmin: vi.fn(),
   isValidAdminMutationOrigin: vi.fn(),
   getRequestSecurityContext: vi.fn(),
   recordAuditLog: vi.fn(),
@@ -23,6 +24,14 @@ const mocks = vi.hoisted(() => ({
   userUpsert: vi.fn(),
   checkReservationRateLimit: vi.fn(),
   getClientIp: vi.fn(),
+  validateImageFile: vi.fn(),
+  saveZonePhoto: vi.fn(),
+  deleteZonePhoto: vi.fn(),
+  toAreaSlug: vi.fn(),
+  zoneFindUnique: vi.fn(),
+  zoneUpsert: vi.fn(),
+  zoneUpdate: vi.fn(),
+  locationFindUnique: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -32,7 +41,7 @@ vi.mock("next/headers", () => ({ headers: mocks.headers }));
 
 vi.mock("@/lib/auth", () => ({
   requireAdmin: mocks.requireAdmin,
-  requireSuperAdmin: vi.fn(),
+  requireSuperAdmin: mocks.requireSuperAdmin,
   signInAdmin: vi.fn(),
   signOutAdmin: vi.fn(),
 }));
@@ -49,6 +58,8 @@ vi.mock("@/lib/security/request", () => ({
     RESERVATION_CONFIRMATION_EMAIL_RESENT: "RESERVATION_CONFIRMATION_EMAIL_RESENT",
     RESERVATION_REJECTED: "RESERVATION_REJECTED",
     RESERVATION_CANCELLED: "RESERVATION_CANCELLED",
+    PHOTO_UPLOADED: "PHOTO_UPLOADED",
+    PHOTO_DELETED: "PHOTO_DELETED",
   },
   recordAuditLog: mocks.recordAuditLog,
 }));
@@ -69,6 +80,7 @@ vi.mock("@/lib/db", () => ({
     },
     location: {
       findFirst: mocks.locationFindFirst,
+      findUnique: mocks.locationFindUnique,
     },
     user: {
       upsert: mocks.userUpsert,
@@ -77,6 +89,11 @@ vi.mock("@/lib/db", () => ({
       create: vi.fn(),
       findUnique: vi.fn(),
       update: vi.fn(),
+    },
+    zone: {
+      findUnique: mocks.zoneFindUnique,
+      upsert: mocks.zoneUpsert,
+      update: mocks.zoneUpdate,
     },
   },
 }));
@@ -87,6 +104,13 @@ vi.mock("@/lib/auth/reservation-rate-limit", () => ({
 
 vi.mock("@/lib/auth/client-ip", () => ({
   getClientIp: mocks.getClientIp,
+}));
+
+vi.mock("@/lib/photos", () => ({
+  validateImageFile: mocks.validateImageFile,
+  saveZonePhoto: mocks.saveZonePhoto,
+  deleteZonePhoto: mocks.deleteZonePhoto,
+  toAreaSlug: mocks.toAreaSlug,
 }));
 
 describe("confirmReservationAction", () => {
@@ -1060,5 +1084,249 @@ describe("createManualReservationAction", () => {
 
     expect(mocks.userUpsert).not.toHaveBeenCalled();
     expect(mocks.reservationCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe("uploadZonePhotoAction", () => {
+  const mockAdmin = {
+    adminId: "admin-super-1",
+    name: "Super Admin",
+    email: "super@tauras.test",
+    role: "SUPER_ADMIN",
+  };
+
+  function buildPhotoFormData(extra: Record<string, string> = {}): FormData {
+    const formData = new FormData();
+    const fields = { locationId: "loc-1", areaValue: "Terraza", ...extra };
+    for (const [key, value] of Object.entries(fields)) {
+      formData.set(key, value);
+    }
+    if (!extra.file) {
+      const blob = new Blob(["fake-image-bytes"], { type: "image/jpeg" });
+      const file = new File([blob], "photo.jpg", { type: "image/jpeg" });
+      formData.set("file", file);
+    }
+    return formData;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    mocks.headers.mockResolvedValue(new Headers({ origin: "https://tauras.test" }));
+    mocks.requireSuperAdmin.mockResolvedValue(mockAdmin);
+    mocks.isValidAdminMutationOrigin.mockReturnValue(true);
+    mocks.getRequestSecurityContext.mockReturnValue({ ip: "127.0.0.1", userAgent: "vitest" });
+    mocks.recordAuditLog.mockResolvedValue(undefined);
+    mocks.toAreaSlug.mockImplementation((val: string) => val.toLowerCase().replace(/\s+/g, "-"));
+    mocks.saveZonePhoto.mockResolvedValue("/uploads/zones/tauras-default/terraza.jpg");
+    mocks.locationFindUnique.mockResolvedValue({ id: "loc-1", slug: "tauras-default" });
+    mocks.redirect.mockImplementation((url: string) => {
+      throw new Error(`redirect:${url}`);
+    });
+  });
+
+  it("uploads a valid photo for a new zone via upsert", async () => {
+    mocks.validateImageFile.mockResolvedValue({ ok: true, buffer: Buffer.from([1, 2, 3]), ext: ".jpg", mime: "image/jpeg" });
+    mocks.zoneFindUnique.mockResolvedValue(null);
+    mocks.zoneUpsert.mockResolvedValue({ id: "zone-1" });
+
+    const { uploadZonePhotoAction } = await import("@/app/actions");
+    await expect(uploadZonePhotoAction(buildPhotoFormData())).rejects.toThrow(
+      "redirect:/admin/settings/photos?ok=photo-uploaded",
+    );
+
+    expect(mocks.validateImageFile).toHaveBeenCalledOnce();
+    expect(mocks.saveZonePhoto).toHaveBeenCalledWith(
+      "public", "tauras-default", "terraza", expect.any(Buffer), ".jpg",
+    );
+    expect(mocks.zoneUpsert).toHaveBeenCalledWith({
+      where: { locationId_areaValue: { locationId: "loc-1", areaValue: "Terraza" } },
+      update: { imagePath: "/uploads/zones/tauras-default/terraza.jpg" },
+      create: { locationId: "loc-1", areaValue: "Terraza", imagePath: "/uploads/zones/tauras-default/terraza.jpg" },
+    });
+    expect(mocks.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      event: "PHOTO_UPLOADED",
+      resourceType: "ZONE",
+      resourceId: "loc-1:Terraza",
+    }));
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/admin/settings/photos");
+  });
+
+  it("replaces an existing zone photo by deleting the old file before upsert", async () => {
+    mocks.validateImageFile.mockResolvedValue({ ok: true, buffer: Buffer.from([1, 2, 3]), ext: ".jpg", mime: "image/jpeg" });
+    mocks.zoneFindUnique.mockResolvedValue({ id: "zone-1", imagePath: "/uploads/zones/tauras-default/terraza-old.jpg" });
+    mocks.zoneUpsert.mockResolvedValue({ id: "zone-1" });
+
+    const { uploadZonePhotoAction } = await import("@/app/actions");
+    await expect(uploadZonePhotoAction(buildPhotoFormData())).rejects.toThrow(
+      "redirect:/admin/settings/photos?ok=photo-uploaded",
+    );
+
+    expect(mocks.deleteZonePhoto).toHaveBeenCalledWith("public", "/uploads/zones/tauras-default/terraza-old.jpg");
+    expect(mocks.saveZonePhoto).toHaveBeenCalledOnce();
+  });
+
+  it("rejects upload when no file is provided", async () => {
+    const { uploadZonePhotoAction } = await import("@/app/actions");
+    const formData = buildPhotoFormData({ file: "" });
+    formData.delete("file");
+
+    await expect(uploadZonePhotoAction(formData)).rejects.toThrow(
+      "redirect:/admin/settings/photos?error=invalid-data",
+    );
+
+    expect(mocks.saveZonePhoto).not.toHaveBeenCalled();
+    expect(mocks.zoneUpsert).not.toHaveBeenCalled();
+  });
+
+  it("rejects upload when validation fails", async () => {
+    mocks.validateImageFile.mockResolvedValue({ ok: false, error: "photo-too-large" });
+
+    const { uploadZonePhotoAction } = await import("@/app/actions");
+    await expect(uploadZonePhotoAction(buildPhotoFormData())).rejects.toThrow(
+      "redirect:/admin/settings/photos?error=photo-too-large",
+    );
+
+    expect(mocks.saveZonePhoto).not.toHaveBeenCalled();
+    expect(mocks.zoneUpsert).not.toHaveBeenCalled();
+  });
+
+  it("rejects upload when area is not allowed for the location", async () => {
+    mocks.validateImageFile.mockResolvedValue({ ok: true, buffer: Buffer.from([1]), ext: ".jpg", mime: "image/jpeg" });
+
+    const { uploadZonePhotoAction } = await import("@/app/actions");
+    await expect(uploadZonePhotoAction(buildPhotoFormData({ areaValue: "Azotea" }))).rejects.toThrow(
+      "redirect:/admin/settings/photos?error=invalid-data",
+    );
+
+    expect(mocks.saveZonePhoto).not.toHaveBeenCalled();
+    expect(mocks.zoneUpsert).not.toHaveBeenCalled();
+  });
+
+  it("rejects upload when no locationId or areaValue is missing", async () => {
+    const { uploadZonePhotoAction } = await import("@/app/actions");
+
+    await expect(uploadZonePhotoAction(buildPhotoFormData({ locationId: "" }))).rejects.toThrow(
+      "redirect:/admin/settings/photos?error=invalid-data",
+    );
+
+    await expect(uploadZonePhotoAction(buildPhotoFormData({ areaValue: "" }))).rejects.toThrow(
+      "redirect:/admin/settings/photos?error=invalid-data",
+    );
+
+    expect(mocks.validateImageFile).not.toHaveBeenCalled();
+  });
+
+  it("rejects upload when location does not exist", async () => {
+    mocks.validateImageFile.mockResolvedValue({ ok: true, buffer: Buffer.from([1]), ext: ".jpg", mime: "image/jpeg" });
+    mocks.locationFindUnique.mockResolvedValue(null);
+
+    const { uploadZonePhotoAction } = await import("@/app/actions");
+    await expect(uploadZonePhotoAction(buildPhotoFormData())).rejects.toThrow(
+      "redirect:/admin/settings/photos?error=invalid-data",
+    );
+
+    expect(mocks.saveZonePhoto).not.toHaveBeenCalled();
+    expect(mocks.zoneUpsert).not.toHaveBeenCalled();
+  });
+});
+
+describe("deleteZonePhotoAction", () => {
+  const mockAdmin = {
+    adminId: "admin-super-1",
+    name: "Super Admin",
+    email: "super@tauras.test",
+    role: "SUPER_ADMIN",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    mocks.headers.mockResolvedValue(new Headers({ origin: "https://tauras.test" }));
+    mocks.requireSuperAdmin.mockResolvedValue(mockAdmin);
+    mocks.isValidAdminMutationOrigin.mockReturnValue(true);
+    mocks.getRequestSecurityContext.mockReturnValue({ ip: "127.0.0.1", userAgent: "vitest" });
+    mocks.recordAuditLog.mockResolvedValue(undefined);
+    mocks.redirect.mockImplementation((url: string) => {
+      throw new Error(`redirect:${url}`);
+    });
+  });
+
+  it("deletes a zone photo and sets imagePath to null", async () => {
+    mocks.zoneFindUnique.mockResolvedValue({
+      id: "zone-1",
+      imagePath: "/uploads/zones/tauras-default/terraza.jpg",
+      areaValue: "Terraza",
+      locationId: "loc-1",
+    });
+    mocks.zoneUpdate.mockResolvedValue({ id: "zone-1" });
+
+    const formData = new FormData();
+    formData.set("zoneId", "zone-1");
+
+    const { deleteZonePhotoAction } = await import("@/app/actions");
+    await expect(deleteZonePhotoAction(formData)).rejects.toThrow(
+      "redirect:/admin/settings/photos?ok=photo-deleted",
+    );
+
+    expect(mocks.deleteZonePhoto).toHaveBeenCalledWith("public", "/uploads/zones/tauras-default/terraza.jpg");
+    expect(mocks.zoneUpdate).toHaveBeenCalledWith({
+      where: { id: "zone-1" },
+      data: { imagePath: null },
+    });
+    expect(mocks.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      event: "PHOTO_DELETED",
+      resourceType: "ZONE",
+      resourceId: "loc-1:Terraza",
+    }));
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/admin/settings/photos");
+  });
+
+  it("rejects delete when zone has no photo", async () => {
+    mocks.zoneFindUnique.mockResolvedValue({
+      id: "zone-1",
+      imagePath: null,
+      areaValue: "Terraza",
+      locationId: "loc-1",
+    });
+
+    const formData = new FormData();
+    formData.set("zoneId", "zone-1");
+
+    const { deleteZonePhotoAction } = await import("@/app/actions");
+    await expect(deleteZonePhotoAction(formData)).rejects.toThrow(
+      "redirect:/admin/settings/photos?error=not-found",
+    );
+
+    expect(mocks.deleteZonePhoto).not.toHaveBeenCalled();
+    expect(mocks.zoneUpdate).not.toHaveBeenCalled();
+  });
+
+  it("rejects delete when zoneId is missing", async () => {
+    const formData = new FormData();
+    formData.set("zoneId", "");
+
+    const { deleteZonePhotoAction } = await import("@/app/actions");
+    await expect(deleteZonePhotoAction(formData)).rejects.toThrow(
+      "redirect:/admin/settings/photos?error=invalid-data",
+    );
+
+    expect(mocks.zoneFindUnique).not.toHaveBeenCalled();
+    expect(mocks.deleteZonePhoto).not.toHaveBeenCalled();
+  });
+
+  it("rejects delete when zone does not exist", async () => {
+    mocks.zoneFindUnique.mockResolvedValue(null);
+
+    const formData = new FormData();
+    formData.set("zoneId", "zone-missing");
+
+    const { deleteZonePhotoAction } = await import("@/app/actions");
+    await expect(deleteZonePhotoAction(formData)).rejects.toThrow(
+      "redirect:/admin/settings/photos?error=not-found",
+    );
+
+    expect(mocks.deleteZonePhoto).not.toHaveBeenCalled();
+    expect(mocks.zoneUpdate).not.toHaveBeenCalled();
   });
 });
