@@ -59,8 +59,22 @@ model Location {
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
   reservations     Reservation[]
+  zones            Zone[]
 
   @@index([isActive, sortOrder])
+}
+
+model Zone {
+  id         String   @id @default(cuid())
+  locationId String
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  areaValue  String
+  imagePath  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([locationId, areaValue])
+  @@index([locationId])
 }
 
 model Reservation {

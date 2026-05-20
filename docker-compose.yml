@@ -71,6 +71,8 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    volumes:
+      - uploads-data:/app/public/uploads
     healthcheck:
       test:
         - CMD
@@ -84,3 +86,4 @@ services:
 
 volumes:
   postgres-data:
+  uploads-data:

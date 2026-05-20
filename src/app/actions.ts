@@ -28,6 +28,12 @@ import {
   isLocationOpenOnDate,
   isLocationTimeAllowed,
 } from "@/lib/reservations/location-config";
+import {
+  validateImageFile,
+  saveZonePhoto,
+  deleteZonePhoto,
+  toAreaSlug,
+} from "@/lib/photos";
 
 function toDateOnly(value: string): Date {
   return new Date(`${value}T00:00:00.000Z`);
@@ -602,6 +608,108 @@ export async function rejectReservationAction(formData: FormData): Promise<void>
   revalidatePath("/admin");
   revalidatePath(`/admin/reservations/${reservationId}`);
   redirectWithSuccess(`/admin/reservations/${reservationId}`, "rejected");
+}
+
+export async function uploadZonePhotoAction(formData: FormData): Promise<void> {
+  const admin = await requireSuperAdmin();
+  const requestHeaders = await requireValidAdminMutationRequest("/admin/settings/photos");
+
+  const locationId = String(formData.get("locationId") ?? "");
+  const areaValue = String(formData.get("areaValue") ?? "");
+  const file = formData.get("file") as File | null;
+
+  if (!locationId || !areaValue || !file || file.size === 0) {
+    redirectWithError("/admin/settings/photos", "invalid-data");
+  }
+
+  const validation = await validateImageFile(file);
+  if (!validation.ok) {
+    redirectWithError("/admin/settings/photos", validation.error);
+  }
+
+  const location = await prisma.location.findUnique({
+    where: { id: locationId },
+    select: { id: true, slug: true },
+  });
+  if (!location) {
+    redirectWithError("/admin/settings/photos", "invalid-data");
+  }
+
+  if (!isLocationAreaAllowed(location.slug, areaValue)) {
+    redirectWithError("/admin/settings/photos", "invalid-data");
+  }
+
+  const areaSlug = toAreaSlug(areaValue);
+  if (!areaSlug) {
+    redirectWithError("/admin/settings/photos", "invalid-data");
+  }
+  const uploadDir = process.env.UPLOAD_DIR ?? "public";
+
+  const existingZone = await prisma.zone.findUnique({
+    where: { locationId_areaValue: { locationId, areaValue } },
+    select: { id: true, imagePath: true },
+  });
+
+  if (existingZone?.imagePath) {
+    await deleteZonePhoto(uploadDir, existingZone.imagePath);
+  }
+
+  const relativePath = await saveZonePhoto(uploadDir, location.slug, areaSlug, validation.buffer, validation.ext);
+
+  await prisma.zone.upsert({
+    where: { locationId_areaValue: { locationId, areaValue } },
+    update: { imagePath: relativePath },
+    create: { locationId, areaValue, imagePath: relativePath },
+  });
+
+  await recordAuditLog({
+    event: AUDIT_EVENT.PHOTO_UPLOADED,
+    actor: admin,
+    request: getRequestSecurityContext(requestHeaders),
+    resourceType: "ZONE",
+    resourceId: `${locationId}:${areaValue}`,
+    metadata: { locationId, areaValue, imagePath: relativePath },
+  });
+
+  revalidatePath("/admin/settings/photos");
+  redirectWithSuccess("/admin/settings/photos", "photo-uploaded");
+}
+
+export async function deleteZonePhotoAction(formData: FormData): Promise<void> {
+  const admin = await requireSuperAdmin();
+  const requestHeaders = await requireValidAdminMutationRequest("/admin/settings/photos");
+
+  const zoneId = String(formData.get("zoneId") ?? "");
+  if (!zoneId) {
+    redirectWithError("/admin/settings/photos", "invalid-data");
+  }
+
+  const zone = await prisma.zone.findUnique({
+    where: { id: zoneId },
+    select: { id: true, imagePath: true, areaValue: true, locationId: true },
+  });
+  if (!zone || !zone.imagePath) {
+    redirectWithError("/admin/settings/photos", "not-found");
+  }
+
+  const uploadDir = process.env.UPLOAD_DIR ?? "public";
+  await deleteZonePhoto(uploadDir, zone.imagePath);
+
+  await prisma.zone.update({
+    where: { id: zoneId },
+    data: { imagePath: null },
+  });
+
+  await recordAuditLog({
+    event: AUDIT_EVENT.PHOTO_DELETED,
+    actor: admin,
+    request: getRequestSecurityContext(requestHeaders),
+    resourceType: "ZONE",
+    resourceId: `${zone.locationId}:${zone.areaValue}`,
+  });
+
+  revalidatePath("/admin/settings/photos");
+  redirectWithSuccess("/admin/settings/photos", "photo-deleted");
 }
 
 export async function cancelReservationAction(formData: FormData): Promise<void> {
