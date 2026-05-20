@@ -601,6 +601,52 @@ button:hover, .button:hover { background: var(--brand-strong); color: #080604; t
 
 .notice.muted-notice { background: rgba(210, 197, 169, .1); border-color: rgba(210, 197, 169, .36); color: var(--muted); }
 
+.active-filters {
+  display: grid;
+  gap: 10px;
+}
+
+.filter-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  color: var(--fg);
+  background: rgba(0, 0, 0, .22);
+  font-size: .82rem;
+  font-weight: 900;
+}
+
+.inline-link {
+  color: var(--brand);
+  font-weight: 900;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  width: fit-content;
+}
+
+.empty-state {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 26px 16px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.empty-state strong {
+  color: var(--fg);
+  font-size: 1rem;
+}
+
 .success-block {
   display: grid;
   gap: 12px;
