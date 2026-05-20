@@ -1,36 +1,63 @@
 import { createReservationAction } from "@/app/actions";
 import { LocationSelector, type PublicLocation } from "@/app/location-selector";
 import { PartySizeField } from "@/app/party-size-field";
+import { ReservationDynamicFields } from "@/app/reservation-dynamic-fields";
 import { ReservationSuccessReset } from "@/app/reservation-success-reset";
 import {
   buildPublicLanguageHref,
   getPublicReservationCopy,
+  getLocationAreaOptions,
   shouldRenderLanguageParam,
 } from "@/lib/i18n/public-reservation-dictionary";
 import { parsePublicLanguage } from "@/lib/i18n/language";
+import {
+  LOCATION_SLUGS,
+  getLocationTimeOptions,
+} from "@/lib/reservations/location-config";
+import type { PublicLanguage } from "@/lib/i18n/language";
 import { PUBLIC_ERROR_MESSAGES, lookupPublicMessage } from "@/lib/messages";
 import { getActiveReservationLocations } from "@/lib/reservations/locations";
-
-const RESERVATION_TIMES = [
-  "11:00", "11:30", "12:00", "12:30", "13:00", "13:30", "14:00", "14:30",
-  "15:00", "15:30", "16:00", "16:30", "17:00", "17:30", "18:00", "18:30",
-  "19:00", "19:30", "20:00", "20:30", "21:00", "21:30", "22:00", "23:00",
-  "00:00", "01:00",
-] as const;
+import type { PublicReservationCopy } from "@/lib/i18n/public-reservation-dictionary";
 
 interface PublicReservationPageProps {
   searchParams: Record<string, string | undefined>;
 }
 
-function toPublicLocations(rows: Awaited<ReturnType<typeof getActiveReservationLocations>>): readonly PublicLocation[] {
+interface AreaOption {
+  value: string;
+  label: string;
+}
+
+function toPublicLocations(
+  rows: Awaited<ReturnType<typeof getActiveReservationLocations>>,
+  locationEntries: PublicReservationCopy["locationEntries"],
+): readonly PublicLocation[] {
   return rows.map((row) => ({
     id: row.id,
     slug: row.slug,
     name: row.name,
-    description: row.reservationLabel,
+    description: locationEntries[row.slug]
+      ? `${locationEntries[row.slug].description} · ${locationEntries[row.slug].hours}`
+      : row.reservationLabel,
     logoSrc: row.logoPath ?? undefined,
     previewSrc: row.heroImagePath ?? undefined,
   }));
+}
+
+function buildAreaOptionsByLocation(language: PublicLanguage): Record<string, readonly AreaOption[]> {
+  const result: Record<string, readonly AreaOption[]> = {};
+  for (const slug of Object.values(LOCATION_SLUGS)) {
+    result[slug] = getLocationAreaOptions(slug, language);
+  }
+  return result;
+}
+
+function buildTimeOptionsByLocation(): Record<string, readonly string[]> {
+  const result: Record<string, readonly string[]> = {};
+  for (const slug of Object.values(LOCATION_SLUGS)) {
+    result[slug] = getLocationTimeOptions(slug);
+  }
+  return result;
 }
 
 export async function PublicReservationPage({ searchParams }: PublicReservationPageProps) {
@@ -38,7 +65,11 @@ export async function PublicReservationPage({ searchParams }: PublicReservationP
   const copy = getPublicReservationCopy(publicLanguage);
   const errorMessage = lookupPublicMessage(PUBLIC_ERROR_MESSAGES, searchParams.error, publicLanguage);
   const activeLocations = await getActiveReservationLocations();
-  const publicLocations = toPublicLocations(activeLocations);
+  const publicLocations = toPublicLocations(activeLocations, copy.locationEntries);
+
+  const areaOptionsByLocation = buildAreaOptionsByLocation(publicLanguage);
+  const timeOptionsByLocation = buildTimeOptionsByLocation();
+  const defaultLocationSlug = publicLocations.length > 0 ? publicLocations[0].slug : "tauras-default";
 
   return (
     <>
@@ -85,27 +116,21 @@ export async function PublicReservationPage({ searchParams }: PublicReservationP
                 isDemo={false}
               />
               <div className="grid two">
-                <label className="area-field" data-depends-on="location">
-                  <span className="label-row">
-                    {copy.form.area}
-                    <span className="area-field-hint">{copy.locations.areaHint}</span>
-                  </span>
-                  <select name="area" defaultValue="Cualquier Mesa Disponible">
-                    {copy.areaOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                  </select>
-                </label>
+                <ReservationDynamicFields
+                  areaOptionsByLocation={areaOptionsByLocation}
+                  timeOptionsByLocation={timeOptionsByLocation}
+                  defaultLocationSlug={defaultLocationSlug}
+                  areaLabel={copy.form.area}
+                  areaHint={copy.locations.areaHint}
+                  timeLabel={copy.form.time}
+                  timePlaceholder={copy.form.timePlaceholder}
+                />
                 <PartySizeField
                   label={copy.form.partySize}
                   alertCopy={copy.form.partySizeHelp}
                   defaultValue={1}
                 />
                 <label>{copy.form.date}<input name="reservationDate" type="date" required /></label>
-                <label>{copy.form.time}
-                  <select name="reservationTime" required defaultValue="">
-                    <option value="" disabled>{copy.form.timePlaceholder}</option>
-                    {RESERVATION_TIMES.map((time) => <option key={time} value={time}>{time}</option>)}
-                  </select>
-                </label>
                 <label>{copy.form.reason}
                   <select name="reason" defaultValue="Ocasional" required>
                     {copy.reasonOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
