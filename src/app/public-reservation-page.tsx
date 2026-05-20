@@ -17,7 +17,7 @@ import {
 } from "@/lib/reservations/location-config";
 import type { PublicLanguage } from "@/lib/i18n/language";
 import { PUBLIC_ERROR_MESSAGES, lookupPublicMessage } from "@/lib/messages";
-import { getActiveReservationLocations } from "@/lib/reservations/locations";
+import { getActiveReservationLocations, getZoneImages } from "@/lib/reservations/locations";
 import { getBusinessTodayDateString } from "@/lib/reservations/business-date";
 import type { PublicReservationCopy } from "@/lib/i18n/public-reservation-dictionary";
 
@@ -93,6 +93,13 @@ export async function PublicReservationPage({ searchParams }: PublicReservationP
   const timeOptionsByLocation = buildTimeOptionsByLocation();
   const defaultLocationSlug = publicLocations.length > 0 ? publicLocations[0].slug : "tauras-default";
   const minimumReservationDate = getBusinessTodayDateString();
+
+  const zoneImagesByLocation: Record<string, Record<string, string | null>> = {};
+  await Promise.all(
+    activeLocations.map(async (loc) => {
+      zoneImagesByLocation[loc.slug] = await getZoneImages(loc.id);
+    }),
+  );
 
   const successSummary = buildSuccessSummary(searchParams, publicLanguage);
 
@@ -188,6 +195,7 @@ export async function PublicReservationPage({ searchParams }: PublicReservationP
                   timeLabel={copy.form.time}
                   timePlaceholder={copy.form.timePlaceholder}
                   zonePreviewFallback={copy.zonePreviewFallback}
+                  zoneImagesByLocation={zoneImagesByLocation}
                 />
                 <PartySizeField
                   label={copy.form.partySize}

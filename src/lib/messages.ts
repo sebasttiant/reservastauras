@@ -72,6 +72,22 @@ export const MANUAL_RESERVATION_ERROR_MESSAGES = {
 
 export type ManualReservationErrorKey = keyof typeof MANUAL_RESERVATION_ERROR_MESSAGES;
 
+export const PHOTO_SUCCESS_MESSAGES = {
+  "photo-uploaded": "Foto subida correctamente.",
+  "photo-deleted": "Foto eliminada correctamente.",
+} as const;
+
+export type PhotoSuccessKey = keyof typeof PHOTO_SUCCESS_MESSAGES;
+
+export const PHOTO_ERROR_MESSAGES = {
+  "invalid-data": "Datos inválidos. Revisá el formulario.",
+  "photo-too-large": "El archivo supera los 2MB.",
+  "unsupported-photo": "Formato no soportado. Usá JPEG, PNG o WebP.",
+  "not-found": "Foto no encontrada.",
+} as const;
+
+export type PhotoErrorKey = keyof typeof PHOTO_ERROR_MESSAGES;
+
 // Helper genérico: devuelve el mensaje si la key está en el diccionario,
 // `null` en caso contrario. Las páginas usan esto para evitar pintar texto
 // arbitrario que venga de la URL.

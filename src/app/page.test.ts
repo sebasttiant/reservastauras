@@ -41,6 +41,7 @@ const threeLocations = [
 
 const locationsMock = vi.hoisted(() => ({
   getActiveReservationLocations: vi.fn(async () => threeLocations),
+  getZoneImages: vi.fn(async () => ({})),
 }));
 
 vi.mock("@/lib/reservations/locations", () => locationsMock);

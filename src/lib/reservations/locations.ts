@@ -31,3 +31,12 @@ export async function resolveActiveLocationById(id: string) {
     select: { id: true },
   });
 }
+
+export async function getZoneImages(locationId: string): Promise<Record<string, string | null>> {
+  const zones = await prisma.zone.findMany({
+    where: { locationId },
+    select: { areaValue: true, imagePath: true },
+  });
+
+  return Object.fromEntries(zones.map((z) => [z.areaValue, z.imagePath]));
+}
