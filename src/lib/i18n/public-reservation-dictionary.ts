@@ -181,7 +181,7 @@ export const PUBLIC_RESERVATION_COPY: Record<PublicLanguage, PublicReservationCo
       area: "Zona",
       partySize: "Cantidad de personas",
       partySizeHelp:
-        "Prepararemos tu mesa para la cantidad exacta de personas indicada. Incluí también niños y bebés en el total.",
+        "Prepararemos tu mesa según el número de personas indicado. Recordá contar también niños y bebés.",
       date: "Fecha",
       time: "Hora disponible",
       timePlaceholder: "Selecciona una hora",
