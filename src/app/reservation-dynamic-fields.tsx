@@ -15,6 +15,7 @@ interface ReservationDynamicFieldsProps {
   areaHint: string;
   timeLabel: string;
   timePlaceholder: string;
+  zonePreviewFallback: string;
 }
 
 export function ReservationDynamicFields({
@@ -25,6 +26,7 @@ export function ReservationDynamicFields({
   areaHint,
   timeLabel,
   timePlaceholder,
+  zonePreviewFallback,
 }: ReservationDynamicFieldsProps): ReactNode {
   const [selectedSlug, setSelectedSlug] = useState(defaultLocationSlug);
 
@@ -43,6 +45,16 @@ export function ReservationDynamicFields({
   const areas = areaOptionsByLocation[selectedSlug] ?? areaOptionsByLocation[defaultLocationSlug] ?? [];
   const times = timeOptionsByLocation[selectedSlug] ?? timeOptionsByLocation[defaultLocationSlug] ?? [];
   const singleArea = areas.length === 1 ? areas[0] : null;
+  const firstArea = areas[0] ?? null;
+
+  const [areaSelection, setAreaSelection] = useState({ slug: defaultLocationSlug, area: "" });
+  const selectedArea = areaSelection.slug === selectedSlug
+    ? areaSelection.area
+    : firstArea?.value ?? "";
+
+  const selectedAreaLabel = singleArea
+    ? singleArea.label
+    : areas.find((a) => a.value === selectedArea)?.label ?? firstArea?.label ?? "";
 
   return (
     <>
@@ -57,13 +69,29 @@ export function ReservationDynamicFields({
             <span className="area-field-single">{singleArea.label}</span>
           </>
         ) : (
-          <select name="area" defaultValue={areas[0]?.value ?? ""}>
+          <select
+            name="area"
+            value={selectedArea}
+            onChange={(e) => setAreaSelection({ slug: selectedSlug, area: e.target.value })}
+          >
             {areas.map((opt) => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
         )}
       </label>
+
+      {selectedAreaLabel && (
+        <figure className="zone-preview" aria-label={selectedAreaLabel}>
+          <div className="zone-preview-card">
+            <span className="zone-preview-name">{selectedAreaLabel}</span>
+            <span className="zone-preview-fallback">
+              {zonePreviewFallback.replace("%s", selectedAreaLabel)}
+            </span>
+          </div>
+        </figure>
+      )}
+
       <label>{timeLabel}
         <select name="reservationTime" required defaultValue="">
           <option value="" disabled>{timePlaceholder}</option>

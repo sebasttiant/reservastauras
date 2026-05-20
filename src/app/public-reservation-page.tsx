@@ -40,7 +40,6 @@ function toPublicLocations(
       ? `${locationEntries[row.slug].description} · ${locationEntries[row.slug].hours}`
       : row.reservationLabel,
     logoSrc: row.logoPath ?? undefined,
-    previewSrc: row.heroImagePath ?? undefined,
   }));
 }
 
@@ -124,6 +123,7 @@ export async function PublicReservationPage({ searchParams }: PublicReservationP
                   areaHint={copy.locations.areaHint}
                   timeLabel={copy.form.time}
                   timePlaceholder={copy.form.timePlaceholder}
+                  zonePreviewFallback={copy.zonePreviewFallback}
                 />
                 <PartySizeField
                   label={copy.form.partySize}

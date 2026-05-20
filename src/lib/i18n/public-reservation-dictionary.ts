@@ -62,8 +62,6 @@ interface PublicReservationLocationsCopy {
   description: string;
   ariaLabel: string;
   demoBadge: string;
-  previewAlt: string;
-  previewFallback: string;
   areaHint: string;
 }
 
@@ -74,6 +72,7 @@ interface LocationEntryCopy {
 
 export interface PublicReservationCopy {
   brandKicker: string;
+  zonePreviewFallback: string;
   hero: PublicReservationHeroCopy;
   section: PublicReservationSectionCopy;
   form: PublicReservationFormCopy;
@@ -138,6 +137,7 @@ function buildCountryOptions(): readonly PublicOptionCopy[] {
 export const PUBLIC_RESERVATION_COPY: Record<PublicLanguage, PublicReservationCopy> = {
   es: {
     brandKicker: "Tauras Steakhouse",
+    zonePreviewFallback: "Foto de %s próximamente",
     hero: {
       title: "Reserva tu mesa con tranquilidad",
       description:
@@ -190,8 +190,6 @@ export const PUBLIC_RESERVATION_COPY: Record<PublicLanguage, PublicReservationCo
       description: "Seleccioná dónde querés reservar. Mostraremos la disponibilidad y los ambientes de esa sede.",
       ariaLabel: "Selección de sede",
       demoBadge: "Demo",
-      previewAlt: "Vista previa de la sede seleccionada",
-      previewFallback: "Vista de la sede próximamente",
       areaHint: "según sede",
     },
     locationEntries: {
@@ -213,6 +211,7 @@ export const PUBLIC_RESERVATION_COPY: Record<PublicLanguage, PublicReservationCo
   },
   en: {
     brandKicker: "Tauras Steakhouse",
+    zonePreviewFallback: "Photo of %s coming soon",
     hero: {
       title: "Book your table with confidence",
       description:
@@ -265,8 +264,6 @@ export const PUBLIC_RESERVATION_COPY: Record<PublicLanguage, PublicReservationCo
       description: "Pick where you want to dine. We will show that location’s availability and dining areas.",
       ariaLabel: "Location selection",
       demoBadge: "Demo",
-      previewAlt: "Preview of the selected location",
-      previewFallback: "Location preview coming soon",
       areaHint: "by location",
     },
     locationEntries: {
