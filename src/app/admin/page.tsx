@@ -102,6 +102,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 </>
               ) : null}
               <Link className="button secondary" href="/admin/users">Usuarios</Link>
+              <Link className="button secondary" href={"/admin/settings/photos" as unknown as Route}>Fotos</Link>
               <Link className="button secondary" href="/admin/settings/email">Correo</Link>
             </>
           ) : null}

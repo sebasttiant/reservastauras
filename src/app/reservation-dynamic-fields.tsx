@@ -1,5 +1,10 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element --
+   Las fotos de zona son rutas públicas persistidas en /uploads por el admin.
+   Se usa img simple para evitar acoplar el MVP a next/image mientras definimos
+   optimización/caché de uploads en volumen Docker. */
+
 import { useEffect, useState, type ReactNode } from "react";
 
 interface AreaOption {
@@ -16,6 +21,7 @@ interface ReservationDynamicFieldsProps {
   timeLabel: string;
   timePlaceholder: string;
   zonePreviewFallback: string;
+  zoneImagesByLocation?: Record<string, Record<string, string | null>>;
 }
 
 export function ReservationDynamicFields({
@@ -27,6 +33,7 @@ export function ReservationDynamicFields({
   timeLabel,
   timePlaceholder,
   zonePreviewFallback,
+  zoneImagesByLocation,
 }: ReservationDynamicFieldsProps): ReactNode {
   const [selectedSlug, setSelectedSlug] = useState(defaultLocationSlug);
 
@@ -47,7 +54,8 @@ export function ReservationDynamicFields({
   const singleArea = areas.length === 1 ? areas[0] : null;
   const firstArea = areas[0] ?? null;
 
-  const [areaSelection, setAreaSelection] = useState({ slug: defaultLocationSlug, area: "" });
+  const initialArea = firstArea?.value ?? "";
+  const [areaSelection, setAreaSelection] = useState({ slug: defaultLocationSlug, area: initialArea });
   const selectedArea = areaSelection.slug === selectedSlug
     ? areaSelection.area
     : firstArea?.value ?? "";
@@ -81,16 +89,28 @@ export function ReservationDynamicFields({
         )}
       </label>
 
-      {selectedAreaLabel && (
-        <figure className="zone-preview" aria-label={selectedAreaLabel}>
-          <div className="zone-preview-card">
-            <span className="zone-preview-name">{selectedAreaLabel}</span>
-            <span className="zone-preview-fallback">
-              {zonePreviewFallback.replace("%s", selectedAreaLabel)}
-            </span>
-          </div>
-        </figure>
-      )}
+      {selectedAreaLabel && (() => {
+        const imageSrc = zoneImagesByLocation?.[selectedSlug]?.[selectedArea];
+        return (
+          <figure className="zone-preview" aria-label={selectedAreaLabel}>
+            {imageSrc ? (
+              <img
+                src={imageSrc}
+                alt={selectedAreaLabel}
+                className="zone-preview-image"
+                loading="lazy"
+              />
+            ) : (
+              <div className="zone-preview-card">
+                <span className="zone-preview-name">{selectedAreaLabel}</span>
+                <span className="zone-preview-fallback">
+                  {zonePreviewFallback.replace("%s", selectedAreaLabel)}
+                </span>
+              </div>
+            )}
+          </figure>
+        );
+      })()}
 
       <label>{timeLabel}
         <select name="reservationTime" required defaultValue="">
