@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { isSupportedPublicLanguage } from "@/lib/i18n/public-reservation-dictionary";
 import { DEFAULT_PUBLIC_LANGUAGE } from "@/lib/i18n/language";
 
-const RESERVATION_SUCCESS_RESET_DELAY_MS = 10_000;
+const RESERVATION_SUCCESS_RESET_DELAY_MS = 16_000;
 
 type ReservationSuccessResetPath = "/" | "/?lang=es";
 

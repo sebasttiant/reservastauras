@@ -601,6 +601,115 @@ button:hover, .button:hover { background: var(--brand-strong); color: #080604; t
 
 .notice.muted-notice { background: rgba(210, 197, 169, .1); border-color: rgba(210, 197, 169, .36); color: var(--muted); }
 
+.success-block {
+  display: grid;
+  gap: 12px;
+  padding: 28px 20px;
+  border-radius: 20px;
+  border: 1px solid rgba(70, 190, 105, .5);
+  background:
+    radial-gradient(120% 60% at 50% 0%, rgba(47, 143, 70, .15), transparent 70%),
+    var(--card-soft);
+  text-align: center;
+}
+
+.success-icon {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: var(--success);
+}
+
+.success-title {
+  font-size: 1.25rem;
+  font-weight: 900;
+  color: var(--fg);
+  letter-spacing: -.02em;
+  margin: 0;
+}
+
+.success-message {
+  color: var(--muted);
+  font-size: .92rem;
+  line-height: 1.5;
+  margin: 0;
+  max-width: 480px;
+  justify-self: center;
+}
+
+.success-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  margin: 4px 0 0;
+}
+
+.success-summary-row {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, .32);
+}
+
+.success-summary-row dt {
+  color: var(--muted);
+  font-size: .72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.success-summary-row dd {
+  margin: 0;
+  color: var(--fg);
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+@media (max-width: 640px) {
+  .success-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.before-booking {
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: rgba(210, 197, 169, .04);
+}
+
+.before-booking-title {
+  font-size: .78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--brand);
+  margin: 0 0 8px;
+}
+
+.before-booking-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0 0 0 16px;
+  list-style: disc;
+  color: var(--muted);
+  font-size: .86rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.before-booking-list li { padding-left: 4px; }
+
+button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
 .error { background: rgba(184, 50, 42, .22); border-color: rgba(255, 120, 100, .55); }
 
 .status-outcome { display: grid; gap: 10px; }

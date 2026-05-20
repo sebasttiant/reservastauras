@@ -139,7 +139,17 @@ export async function createReservationAction(formData: FormData): Promise<void>
   });
 
   revalidatePath("/admin");
-  redirect(buildPublicRedirect(input.customerLanguage, { created: "1" }) as Route);
+  redirect(
+    buildPublicRedirect(input.customerLanguage, {
+      created: "1",
+      n: input.name,
+      d: input.reservationDate,
+      t: input.reservationTime,
+      p: String(input.partySize),
+      l: input.locationSlug,
+      ...(input.area ? { a: input.area } : {}),
+    }) as Route,
+  );
 }
 
 export async function loginAction(formData: FormData): Promise<void> {

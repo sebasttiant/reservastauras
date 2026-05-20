@@ -30,11 +30,13 @@ interface PublicReservationFormCopy {
   timePlaceholder: string;
   reason: string;
   name: string;
+  nameHint: string;
   namePlaceholder: string;
   email: string;
   emailPlaceholder: string;
   country: string;
   phone: string;
+  phoneHint: string;
   phonePlaceholder: string;
   phoneTitle: string;
   notes: string;
@@ -42,6 +44,7 @@ interface PublicReservationFormCopy {
   isAdult: string;
   dataConsent: string;
   submit: string;
+  submitPending: string;
   note: string;
 }
 
@@ -54,6 +57,19 @@ interface PublicReservationLanguageCopy {
 interface PublicReservationMessagesCopy {
   created: string;
   unavailable: string;
+}
+
+interface PublicReservationBeforeBookingCopy {
+  title: string;
+  items: readonly string[];
+}
+
+interface PublicReservationSuccessCopy {
+  title: string;
+  date: string;
+  time: string;
+  guests: string;
+  area: string;
 }
 
 interface PublicReservationLocationsCopy {
@@ -75,7 +91,9 @@ export interface PublicReservationCopy {
   zonePreviewFallback: string;
   hero: PublicReservationHeroCopy;
   section: PublicReservationSectionCopy;
+  beforeBooking: PublicReservationBeforeBookingCopy;
   form: PublicReservationFormCopy;
+  success: PublicReservationSuccessCopy;
   language: PublicReservationLanguageCopy;
   messages: PublicReservationMessagesCopy;
   locations: PublicReservationLocationsCopy;
@@ -151,6 +169,14 @@ export const PUBLIC_RESERVATION_COPY: Record<PublicLanguage, PublicReservationCo
       description: "Completa la solicitud. Si necesitamos ajustar algo, te contactaremos antes de confirmar.",
       ariaLabel: "Formulario de reserva Tauras Steakhouse",
     },
+    beforeBooking: {
+      title: "Antes de reservar",
+      items: [
+        "Revisamos cada solicitud personalmente antes de confirmar.",
+        "Te contactaremos al email o teléfono que nos indiques.",
+        "La reserva no está confirmada hasta que recibas nuestra confirmación.",
+      ],
+    },
     form: {
       area: "Zona",
       partySize: "Cantidad de personas",
@@ -161,11 +187,13 @@ export const PUBLIC_RESERVATION_COPY: Record<PublicLanguage, PublicReservationCo
       timePlaceholder: "Selecciona una hora",
       reason: "Motivo de la reserva",
       name: "Nombre",
+      nameHint: "Tal como figura en tu documento",
       namePlaceholder: "Escribe tu nombre",
       email: "Email",
       emailPlaceholder: "correo@ejemplo.com",
       country: "País",
       phone: "Teléfono",
+      phoneHint: "Incluí código de país",
       phonePlaceholder: "3001234567",
       phoneTitle: "Ingresá un teléfono válido. Podés usar espacios, +, guiones o paréntesis.",
       notes: "Especificaciones",
@@ -173,7 +201,15 @@ export const PUBLIC_RESERVATION_COPY: Record<PublicLanguage, PublicReservationCo
       isAdult: "Declaro que soy mayor de edad.",
       dataConsent: "Autorizo el tratamiento de mis datos para gestionar la reserva.",
       submit: "Solicitar reserva",
+      submitPending: "Enviando…",
       note: "No es confirmación automática: cuidamos cada turno para darte una mejor experiencia.",
+    },
+    success: {
+      title: "¡Solicitud enviada con éxito!",
+      date: "Fecha",
+      time: "Hora",
+      guests: "Personas",
+      area: "Zona",
     },
     language: {
       ariaLabel: "Idioma del formulario de reservas",
@@ -225,6 +261,14 @@ export const PUBLIC_RESERVATION_COPY: Record<PublicLanguage, PublicReservationCo
       description: "Complete the request. If anything needs adjusting, we will contact you before confirming.",
       ariaLabel: "Tauras Steakhouse reservation form",
     },
+    beforeBooking: {
+      title: "Before booking",
+      items: [
+        "We review each request personally before confirming.",
+        "We will contact you at the email or phone you provide.",
+        "Your reservation is not confirmed until you receive our confirmation.",
+      ],
+    },
     form: {
       area: "Area",
       partySize: "Number of guests",
@@ -235,11 +279,13 @@ export const PUBLIC_RESERVATION_COPY: Record<PublicLanguage, PublicReservationCo
       timePlaceholder: "Select a time",
       reason: "Reservation reason",
       name: "Name",
+      nameHint: "As it appears on your ID",
       namePlaceholder: "Enter your name",
       email: "Email",
       emailPlaceholder: "email@example.com",
       country: "Country",
       phone: "Phone",
+      phoneHint: "Include country code",
       phonePlaceholder: "3001234567",
       phoneTitle: "Enter a valid phone number. You may use spaces, +, dashes, or parentheses.",
       notes: "Notes",
@@ -247,7 +293,15 @@ export const PUBLIC_RESERVATION_COPY: Record<PublicLanguage, PublicReservationCo
       isAdult: "I confirm that I am of legal age.",
       dataConsent: "I authorize the use of my data to manage the reservation.",
       submit: "Request reservation",
+      submitPending: "Sending…",
       note: "This is not an automatic confirmation: we review every time slot to give you a better experience.",
+    },
+    success: {
+      title: "Request submitted successfully!",
+      date: "Date",
+      time: "Time",
+      guests: "Guests",
+      area: "Area",
     },
     language: {
       ariaLabel: "Reservation form language",

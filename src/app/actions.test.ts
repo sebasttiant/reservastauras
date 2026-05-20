@@ -865,7 +865,9 @@ describe("createReservationAction (persistencia bilingüe + redirects saneados)"
     const formData = buildFormData({ customerLanguage: "es", lang: "es" });
     const { createReservationAction } = await import("@/app/actions");
 
-    await expect(createReservationAction(formData)).rejects.toThrow("redirect:/?created=1&lang=es");
+    await expect(createReservationAction(formData)).rejects.toThrow(/redirect:/);
+    expect(mocks.redirect).toHaveBeenCalledWith(expect.stringContaining("created=1"));
+    expect(mocks.redirect).toHaveBeenCalledWith(expect.stringContaining("lang=es"));
 
     const createArgs = mocks.reservationCreate.mock.calls[0]?.[0] as { data: Record<string, unknown> };
     expect(createArgs.data.customerLanguage).toBe("es");
