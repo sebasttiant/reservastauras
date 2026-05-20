@@ -221,8 +221,8 @@ export const PUBLIC_RESERVATION_COPY: Record<PublicLanguage, PublicReservationCo
       unavailable: "Las reservas en línea no están disponibles en este momento. Por favor contáctanos directamente para ayudarte.",
     },
     locations: {
-      kicker: "Sede",
-      title: "Elegí tu sede",
+      kicker: "",
+      title: "Seleccioná restaurante",
       description: "Seleccioná dónde querés reservar. Mostraremos la disponibilidad y los ambientes de esa sede.",
       ariaLabel: "Selección de sede",
       demoBadge: "Demo",
@@ -313,8 +313,8 @@ export const PUBLIC_RESERVATION_COPY: Record<PublicLanguage, PublicReservationCo
       unavailable: "Online reservations are currently unavailable. Please contact us directly so we can help you.",
     },
     locations: {
-      kicker: "Location",
-      title: "Choose your location",
+      kicker: "",
+      title: "Select restaurant",
       description: "Pick where you want to dine. We will show that location’s availability and dining areas.",
       ariaLabel: "Location selection",
       demoBadge: "Demo",

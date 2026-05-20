@@ -16,9 +16,7 @@ export interface PublicLocation {
 }
 
 interface LocationSelectorCopy {
-  kicker: string;
   title: string;
-  description: string;
   ariaLabel: string;
   demoBadge: string;
 }
@@ -37,12 +35,8 @@ export function LocationSelector({
   return (
     <section className="location-selector" aria-label={copy.ariaLabel}>
       <header className="location-selector-heading">
-        <p className="brand-kicker">
-          {copy.kicker}
-          {isDemo ? <span className="location-demo-badge">{copy.demoBadge}</span> : null}
-        </p>
         <h3>{copy.title}</h3>
-        <p className="muted">{copy.description}</p>
+        {isDemo ? <span className="location-demo-badge">{copy.demoBadge}</span> : null}
       </header>
 
       <div className="location-cards" role="radiogroup" aria-label={copy.ariaLabel}>

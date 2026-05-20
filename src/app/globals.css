@@ -374,7 +374,12 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   background: var(--card-soft);
 }
 
-.location-selector-heading { display: grid; gap: 4px; }
+.location-selector-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
 .location-selector-heading h3 {
   margin: 0;
   color: var(--brand);
@@ -387,10 +392,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   color: #ff8e80;
   font-weight: 900;
 }
-.location-selector-heading p { margin: 0; font-size: .88rem; }
-
 .location-demo-badge {
-  margin-left: 8px;
   padding: 2px 8px;
   border-radius: 999px;
   border: 1px solid rgba(236, 154, 41, .62);
