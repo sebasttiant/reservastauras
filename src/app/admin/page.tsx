@@ -6,6 +6,7 @@ import { ADMIN_ROLE, RESERVATION_STATUS } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 import { ADMIN_ERROR_MESSAGES, lookupMessage } from "@/lib/messages";
+import { getBusinessTodayDateString } from "@/lib/reservations/business-date";
 import { AdminReservationFilters } from "./_components/admin-reservation-filters";
 
 // Construye la URL del export forwardeando los filtros activos del dashboard.
@@ -75,6 +76,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const hasActiveFilters = Boolean(status || query || date);
   const exportXlsxHref = buildExportHref({ format: "xlsx", status, q: query, date });
   const exportPdfHref = buildExportHref({ format: "pdf", status, q: query, date });
+  const today = getBusinessTodayDateString();
 
   return (
     <main className="admin-shell">
@@ -122,10 +124,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           <form action="/api/export" method="get" className="grid">
             <div className="grid two">
               <label>Desde
-                <input name="from" type="date" required />
+                <input name="from" type="date" max={today} required />
               </label>
               <label>Hasta
-                <input name="to" type="date" required />
+                <input name="to" type="date" max={today} required />
               </label>
             </div>
             <div className="actions">
