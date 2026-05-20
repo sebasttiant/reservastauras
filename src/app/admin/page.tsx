@@ -77,6 +77,11 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const exportXlsxHref = buildExportHref({ format: "xlsx", status, q: query, date });
   const exportPdfHref = buildExportHref({ format: "pdf", status, q: query, date });
   const today = getBusinessTodayDateString();
+  const activeFilterItems = [
+    status ? `Estado: ${STATUS_LABELS[status]}` : null,
+    date ? `Fecha: ${date}` : null,
+    query ? `Búsqueda: ${query}` : null,
+  ].filter((item): item is string => item !== null);
 
   return (
     <main className="admin-shell">
@@ -112,6 +117,16 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       </nav>
 
       <AdminReservationFilters key={`${status ?? ""}-${query ?? ""}-${date ?? ""}`} query={query ?? ""} date={date ?? ""} status={status} maxDate={today} />
+
+      {activeFilterItems.length > 0 ? (
+        <aside className="notice muted-notice active-filters" aria-label="Filtros activos" role="status">
+          <strong>Filtros activos</strong>
+          <div className="filter-chip-list">
+            {activeFilterItems.map((item) => <span className="filter-chip" key={item}>{item}</span>)}
+          </div>
+          <Link className="inline-link" href="/admin">Limpiar filtros</Link>
+        </aside>
+      ) : null}
 
       {admin.role === ADMIN_ROLE.SUPER_ADMIN ? (
         <section className="card grid" aria-label="Exportar reportes">
@@ -163,7 +178,15 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           <thead><tr><th>Fecha</th><th>Hora</th><th>Sede</th><th>Cliente</th><th>Teléfono</th><th>Área</th><th>Estado</th><th>Creada</th><th /></tr></thead>
           <tbody>
             {reservations.length === 0 ? (
-              <tr><td colSpan={9} className="muted">No hay reservas para este filtro.</td></tr>
+              <tr>
+                <td colSpan={9}>
+                  <div className="empty-state">
+                    <strong>No encontramos reservas para esta vista.</strong>
+                    <span>{hasActiveFilters ? "Probá limpiar los filtros o ajustar la búsqueda." : "Cuando entren reservas, aparecerán acá."}</span>
+                    {hasActiveFilters ? <Link className="button secondary table-button" href="/admin">Limpiar filtros</Link> : null}
+                  </div>
+                </td>
+              </tr>
             ) : (
               reservations.map((reservation) => (
                 <tr key={reservation.id}>

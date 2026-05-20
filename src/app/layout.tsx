@@ -10,6 +10,10 @@ export const metadata: Metadata = {
   description:
     "Reserva tu mesa en Tauras Steakhouse, Tauras Bar & Lounge o Tauras Tex Mex con confirmación personalizada del equipo.",
   applicationName: "Reservas Tauras",
+  icons: {
+    icon: "/icon.png",
+    apple: "/icon.png",
+  },
   keywords: [
     "Tauras",
     "reservas Tauras",
