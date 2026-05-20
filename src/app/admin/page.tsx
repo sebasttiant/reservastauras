@@ -111,7 +111,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         {Object.values(RESERVATION_STATUS).map((item) => <Link key={item} href={`/admin?status=${item}`}>{STATUS_LABELS[item]}</Link>)}
       </nav>
 
-      <AdminReservationFilters key={`${status ?? ""}-${query ?? ""}-${date ?? ""}`} query={query ?? ""} date={date ?? ""} status={status} />
+      <AdminReservationFilters key={`${status ?? ""}-${query ?? ""}-${date ?? ""}`} query={query ?? ""} date={date ?? ""} status={status} maxDate={today} />
 
       {admin.role === ADMIN_ROLE.SUPER_ADMIN ? (
         <section className="card grid" aria-label="Exportar reportes">

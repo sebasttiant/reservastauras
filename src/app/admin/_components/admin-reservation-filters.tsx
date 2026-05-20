@@ -9,11 +9,12 @@ interface AdminReservationFiltersProps {
   query: string;
   date: string;
   status: string | undefined;
+  maxDate: string;
 }
 
 const SEARCH_DEBOUNCE_MS = 500;
 
-export function AdminReservationFilters({ query, date, status }: AdminReservationFiltersProps) {
+export function AdminReservationFilters({ query, date, status, maxDate }: AdminReservationFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [searchValue, setSearchValue] = useState(query);
@@ -57,6 +58,7 @@ export function AdminReservationFilters({ query, date, status }: AdminReservatio
         <input
           name="date"
           type="date"
+          max={maxDate}
           value={dateValue}
           onChange={(event) => updateDate(event.target.value)}
         />
