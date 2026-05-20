@@ -1,7 +1,6 @@
 import { hash } from "bcryptjs";
 import { AdminRole, PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { LOCATION_AREA_VALUES } from "../src/lib/reservations/location-config";
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -53,6 +52,21 @@ const DEFAULT_LOCATIONS = [
   },
 ] as const;
 
+// Keep this seed self-contained: the production Docker runner copies `prisma/`
+// but not the full `src/` tree, so importing app modules from here breaks deploy.
+// These values intentionally mirror `src/lib/reservations/location-config.ts`.
+const SEED_LOCATION_AREA_VALUES: Record<string, readonly string[]> = {
+  "tauras-default": [
+    "Cualquier Mesa Disponible", "Terraza", "Pasillo", "Patio", "Barra",
+  ],
+  "tauras-bar-lounge": [
+    "Tauras Bar & Lounge",
+  ],
+  "tauras-tex-mex": [
+    "Cualquier Mesa Disponible", "Terraza", "Pasillo", "Salón", "Barra",
+  ],
+} as const;
+
 async function main() {
   const email = process.env.ADMIN_EMAIL;
   const password = process.env.ADMIN_PASSWORD;
@@ -88,7 +102,7 @@ async function main() {
       create: location,
     });
 
-    const areaValues = LOCATION_AREA_VALUES[location.slug] ?? [];
+    const areaValues = SEED_LOCATION_AREA_VALUES[location.slug] ?? [];
     for (const areaValue of areaValues) {
       await prisma.zone.upsert({
         where: { locationId_areaValue: { locationId: savedLocation.id, areaValue } },
