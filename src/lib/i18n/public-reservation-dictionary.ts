@@ -170,11 +170,11 @@ export const PUBLIC_RESERVATION_COPY: Record<PublicLanguage, PublicReservationCo
       ariaLabel: "Formulario de reserva Tauras Steakhouse",
     },
     beforeBooking: {
-      title: "Antes de reservar",
+      title: "Puntos a considerar",
       items: [
-        "Revisamos cada solicitud personalmente antes de confirmar.",
-        "Te contactaremos al email o teléfono que nos indiques.",
-        "La reserva no está confirmada hasta que recibas nuestra confirmación.",
+        "Revisaremos tu solicitud y confirmaremos la disponibilidad.",
+        "Te contactaremos por email o teléfono si necesitamos ajustar algún detalle.",
+        "La reserva queda confirmada únicamente cuando nuestro equipo te responda.",
       ],
     },
     form: {
@@ -262,11 +262,11 @@ export const PUBLIC_RESERVATION_COPY: Record<PublicLanguage, PublicReservationCo
       ariaLabel: "Tauras Steakhouse reservation form",
     },
     beforeBooking: {
-      title: "Before booking",
+      title: "Good to know",
       items: [
-        "We review each request personally before confirming.",
-        "We will contact you at the email or phone you provide.",
-        "Your reservation is not confirmed until you receive our confirmation.",
+        "Our team will review your request and confirm availability.",
+        "We will contact you by email or phone if any detail needs adjustment.",
+        "Your reservation is confirmed only after our team replies.",
       ],
     },
     form: {

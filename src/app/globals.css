@@ -721,10 +721,10 @@ button:hover, .button:hover { background: var(--brand-strong); color: #080604; t
 }
 
 .before-booking {
-  padding: 14px 16px;
-  border-radius: 14px;
-  border: 1px solid var(--border);
-  background: rgba(210, 197, 169, .04);
+  padding: 16px 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(210, 197, 169, .22);
+  background: linear-gradient(180deg, rgba(210, 197, 169, .07), rgba(210, 197, 169, .025));
 }
 
 .before-booking-title {
@@ -738,17 +738,31 @@ button:hover, .button:hover { background: var(--brand-strong); color: #080604; t
 
 .before-booking-list {
   display: grid;
-  gap: 6px;
+  gap: 8px;
   margin: 0;
-  padding: 0 0 0 16px;
-  list-style: disc;
+  padding: 0;
+  list-style: none;
   color: var(--muted);
   font-size: .86rem;
   font-weight: 600;
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
-.before-booking-list li { padding-left: 4px; }
+.before-booking-list li {
+  position: relative;
+  padding-left: 18px;
+}
+
+.before-booking-list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: .58em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--brand);
+}
 
 button:disabled {
   opacity: .55;
