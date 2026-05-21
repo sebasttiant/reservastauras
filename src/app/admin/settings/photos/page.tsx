@@ -3,7 +3,7 @@ import {
   deleteZonePhotoAction,
 } from "@/app/actions";
 import { prisma } from "@/lib/db";
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 import { PHOTO_SUCCESS_MESSAGES, PHOTO_ERROR_MESSAGES, lookupMessage } from "@/lib/messages";
 import { LOCATION_AREA_VALUES } from "@/lib/reservations/location-config";
 import { getActiveReservationLocations } from "@/lib/reservations/locations";
@@ -48,7 +48,7 @@ async function ensureZoneRows(locationId: string, slug: string): Promise<void> {
 }
 
 export default async function AdminPhotosPage({ searchParams }: PhotosPageProps) {
-  await requireSuperAdmin();
+  await requireAdmin();
   const params = await searchParams;
   const successMessage = params.ok ? lookupMessage(PHOTO_SUCCESS_MESSAGES, params.ok) : null;
   const errorMessage = lookupMessage(PHOTO_ERROR_MESSAGES, params.error);

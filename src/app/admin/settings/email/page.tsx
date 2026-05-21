@@ -1,11 +1,11 @@
 import { getEnv } from "@/lib/env";
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 
 export const metadata = { title: "Correo · Reservas Tauras" };
 export const dynamic = "force-dynamic";
 
 export default async function EmailSettingsPage() {
-  await requireSuperAdmin();
+  await requireAdmin();
   const env = getEnv();
   const smtpConfigured = Boolean(env.SMTP_HOST);
 

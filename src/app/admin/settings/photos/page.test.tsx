@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const zoneStore: Record<string, { areaValue: string; imagePath: string | null; id: string }[]> = {};
 
 const mocks = vi.hoisted(() => ({
-  requireSuperAdmin: vi.fn(),
+  requireAdmin: vi.fn(),
   locationFindMany: vi.fn(),
   zoneFindMany: vi.fn<(args: unknown) => Promise<typeof zoneStore[string]>>(),
   zoneUpsert: vi.fn(),
@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
-vi.mock("@/lib/auth", () => ({ requireSuperAdmin: mocks.requireSuperAdmin }));
+vi.mock("@/lib/auth", () => ({ requireAdmin: mocks.requireAdmin }));
 vi.mock("@/lib/db", () => ({
   prisma: {
     location: { findMany: mocks.locationFindMany },
@@ -72,7 +72,7 @@ async function renderPhotosPage(searchParams: Record<string, string | undefined>
 describe("AdminSettingsPhotosPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.requireSuperAdmin.mockResolvedValue(mockAdmin);
+    mocks.requireAdmin.mockResolvedValue(mockAdmin);
     mocks.locationFindMany.mockResolvedValue([
       { id: "loc-1", slug: "tauras-default", name: "TAURAS Steakhouse" },
       { id: "loc-2", slug: "tauras-bar-lounge", name: "TAURAS Bar & Lounge" },

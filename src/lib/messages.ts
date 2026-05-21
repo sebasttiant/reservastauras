@@ -88,6 +88,20 @@ export const PHOTO_ERROR_MESSAGES = {
 
 export type PhotoErrorKey = keyof typeof PHOTO_ERROR_MESSAGES;
 
+export const CHANGE_PASSWORD_SUCCESS_MESSAGES = {
+  "password-changed": "Contraseña actualizada correctamente.",
+} as const;
+
+export type ChangePasswordSuccessKey = keyof typeof CHANGE_PASSWORD_SUCCESS_MESSAGES;
+
+export const CHANGE_PASSWORD_ERROR_MESSAGES = {
+  "invalid-request": "Solicitud inválida. Recargá la página e intentá nuevamente.",
+  "invalid-data": "Datos inválidos. Revisá el formulario.",
+  "wrong-current-password": "La contraseña actual no es correcta.",
+} as const;
+
+export type ChangePasswordErrorKey = keyof typeof CHANGE_PASSWORD_ERROR_MESSAGES;
+
 // Helper genérico: devuelve el mensaje si la key está en el diccionario,
 // `null` en caso contrario. Las páginas usan esto para evitar pintar texto
 // arbitrario que venga de la URL.

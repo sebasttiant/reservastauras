@@ -5,7 +5,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { Route } from "next";
 import { Prisma } from "@prisma/client";
-import { hash } from "bcryptjs";
+import { compare, hash } from "bcryptjs";
 import { RESERVATION_STATUS } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { sendReservationCancellationEmail, sendReservationConfirmationEmail, sendReservationRejectionEmail } from "@/lib/email";
@@ -16,7 +16,7 @@ import {
 } from "@/lib/i18n/language";
 import { canTransitionReservation } from "@/lib/reservations/state";
 import { resolveActiveLocationById, resolveActiveLocationBySlug } from "@/lib/reservations/locations";
-import { createAdminSchema, formDataToRecord, loginSchema, manualReservationSchema, reservationRequestSchema, toggleAdminSchema } from "@/lib/validation";
+import { changePasswordSchema, createAdminSchema, formDataToRecord, loginSchema, manualReservationSchema, reservationRequestSchema, toggleAdminSchema } from "@/lib/validation";
 import { requireAdmin, requireSuperAdmin, signInAdmin, signOutAdmin } from "@/lib/auth";
 import { getClientIp } from "@/lib/auth/client-ip";
 import { checkLoginAllowed, normalizeEmailKey, recordLoginAttempt } from "@/lib/auth/rate-limit";
@@ -611,7 +611,7 @@ export async function rejectReservationAction(formData: FormData): Promise<void>
 }
 
 export async function uploadZonePhotoAction(formData: FormData): Promise<void> {
-  const admin = await requireSuperAdmin();
+  const admin = await requireAdmin();
   const requestHeaders = await requireValidAdminMutationRequest("/admin/settings/photos");
 
   const locationId = String(formData.get("locationId") ?? "");
@@ -676,7 +676,7 @@ export async function uploadZonePhotoAction(formData: FormData): Promise<void> {
 }
 
 export async function deleteZonePhotoAction(formData: FormData): Promise<void> {
-  const admin = await requireSuperAdmin();
+  const admin = await requireAdmin();
   const requestHeaders = await requireValidAdminMutationRequest("/admin/settings/photos");
 
   const zoneId = String(formData.get("zoneId") ?? "");
@@ -785,4 +785,38 @@ export async function cancelReservationAction(formData: FormData): Promise<void>
   revalidatePath("/admin");
   revalidatePath(`/admin/reservations/${reservationId}`);
   redirectWithSuccess(`/admin/reservations/${reservationId}`, "cancelled");
+}
+
+export async function changePasswordAction(formData: FormData): Promise<void> {
+  const admin = await requireAdmin();
+  const requestHeaders = await requireValidAdminMutationRequest("/admin/account/password");
+  const parsed = changePasswordSchema.safeParse(formDataToRecord(formData));
+  if (!parsed.success) redirectWithError("/admin/account/password", "invalid-data");
+
+  const { currentPassword, newPassword } = parsed.data;
+
+  const stored = await prisma.admin.findUnique({
+    where: { id: admin.adminId },
+    select: { passwordHash: true },
+  });
+  if (!stored) redirectWithError("/admin/account/password", "invalid-request");
+
+  const currentMatches = await compare(currentPassword, stored.passwordHash);
+  if (!currentMatches) redirectWithError("/admin/account/password", "wrong-current-password");
+
+  await prisma.admin.update({
+    where: { id: admin.adminId },
+    data: { passwordHash: await hash(newPassword, 12) },
+  });
+
+  await recordAuditLog({
+    event: AUDIT_EVENT.ADMIN_PASSWORD_CHANGED,
+    actor: admin,
+    request: getRequestSecurityContext(requestHeaders),
+    resourceType: "ADMIN",
+    resourceId: admin.adminId,
+  });
+
+  revalidatePath("/admin/account/password");
+  redirectWithSuccess("/admin/account/password", "password-changed");
 }
