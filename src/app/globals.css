@@ -850,6 +850,54 @@ button:disabled {
 
 .admin-shell { display: grid; gap: 18px; }
 
+.contact-info {
+  background: rgba(37, 211, 102, .08);
+  border: 1px solid rgba(37, 211, 102, .3);
+  border-radius: 16px;
+  padding: 20px 24px;
+  display: grid;
+  gap: 8px;
+}
+.contact-info-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--fg);
+}
+.contact-info-description {
+  margin: 0;
+  font-size: .88rem;
+  color: var(--muted);
+}
+.contact-phone-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #25d366;
+  text-decoration: none;
+  width: fit-content;
+  padding: 8px 16px;
+  border-radius: 12px;
+  background: rgba(37, 211, 102, .1);
+  border: 1px solid rgba(37, 211, 102, .2);
+  transition: background .15s, transform .1s;
+}
+.contact-phone-link:hover {
+  background: rgba(37, 211, 102, .18);
+  border-color: rgba(37, 211, 102, .5);
+  transform: scale(1.02);
+}
+.contact-whatsapp-icon {
+  flex-shrink: 0;
+}
+.contact-info-hint {
+  margin: 0;
+  font-size: .8rem;
+  color: var(--muted);
+}
+
 .admin-header {
   display: flex;
   justify-content: space-between;

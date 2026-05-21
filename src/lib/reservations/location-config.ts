@@ -46,6 +46,18 @@ export const LOCATION_OPEN_WEEKDAYS: Record<string, readonly number[]> = {
   [LOCATION_SLUGS.TEX_MEX]: WEDNESDAY_TO_SUNDAY,
 } as const;
 
+export const LOCATION_PHONES: Record<string, string> = {
+  [LOCATION_SLUGS.STEAKHOUSE]: "313 539 81 47",
+  [LOCATION_SLUGS.BAR_LOUNGE]: "313 539 81 47",
+  [LOCATION_SLUGS.TEX_MEX]: "311 705 03 30",
+} as const;
+
+export const LOCATION_WHATSAPP_URLS: Record<string, string> = {
+  [LOCATION_SLUGS.STEAKHOUSE]: "https://wa.me/573135398147",
+  [LOCATION_SLUGS.BAR_LOUNGE]: "https://wa.me/573135398147",
+  [LOCATION_SLUGS.TEX_MEX]: "https://wa.me/573117050330",
+} as const;
+
 export function getLocationAreaValues(slug: string): readonly string[] {
   return LOCATION_AREA_VALUES[slug] ?? LOCATION_AREA_VALUES[DEFAULT_LOCATION_SLUG];
 }
