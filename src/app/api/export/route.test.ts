@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  requireSuperAdmin: vi.fn(),
+  requireAdmin: vi.fn(),
   reservationFindMany: vi.fn(),
   recordAuditLog: vi.fn(),
 }));
@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("server-only", () => ({}));
 
 vi.mock("@/lib/auth", () => ({
-  requireSuperAdmin: mocks.requireSuperAdmin,
+  requireAdmin: mocks.requireAdmin,
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -34,7 +34,7 @@ const ADMIN = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.requireSuperAdmin.mockResolvedValue(ADMIN);
+  mocks.requireAdmin.mockResolvedValue(ADMIN);
   mocks.reservationFindMany.mockResolvedValue([]);
   mocks.recordAuditLog.mockResolvedValue(undefined);
 });
@@ -44,10 +44,10 @@ afterEach(() => {
 });
 
 describe("GET /api/export — permission gate", () => {
-  it("propagates the redirect from requireSuperAdmin and never queries the DB", async () => {
+  it("propagates the redirect from requireAdmin and never queries the DB", async () => {
     // En Next.js, `redirect()` lanza un error opaco; replicamos esa semántica
-    // verificando que la route no continúa cuando requireSuperAdmin rechaza.
-    mocks.requireSuperAdmin.mockRejectedValueOnce(new Error("NEXT_REDIRECT"));
+    // verificando que la route no continúa cuando requireAdmin rechaza.
+    mocks.requireAdmin.mockRejectedValueOnce(new Error("NEXT_REDIRECT"));
 
     const { GET } = await import("@/app/api/export/route");
     await expect(GET(new Request("http://localhost/api/export"))).rejects.toThrow("NEXT_REDIRECT");

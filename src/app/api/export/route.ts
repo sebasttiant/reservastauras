@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 import { AUDIT_EVENT, recordAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 import { wrapText } from "@/lib/pdf/wrap";
@@ -46,7 +46,7 @@ function formatReservationSource(source: string): string {
 }
 
 export async function GET(request: Request) {
-  const admin = await requireSuperAdmin();
+  const admin = await requireAdmin();
 
   const { searchParams } = new URL(request.url);
   const parsed = parseExportFilters(searchParams);

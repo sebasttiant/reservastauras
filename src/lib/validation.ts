@@ -89,6 +89,17 @@ export const toggleAdminSchema = z.object({
   adminId: z.string().min(1),
 });
 
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, { error: "Ingresá tu contraseña actual." }),
+    newPassword: z.string().min(10, { error: "La nueva contraseña debe tener al menos 10 caracteres." }),
+    confirmPassword: z.string().min(1, { error: "Confirmá la nueva contraseña." }),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    error: "Las contraseñas nuevas no coinciden.",
+    path: ["confirmPassword"],
+  });
+
 export type ReservationRequestInput = z.infer<typeof reservationRequestSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type CreateAdminInput = z.infer<typeof createAdminSchema>;

@@ -93,18 +93,17 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         </div>
         <div className="actions">
           <Link className="button" href="/admin/reservations/new">Nueva reserva</Link>
-          {admin.role === ADMIN_ROLE.SUPER_ADMIN ? (
+          {hasActiveFilters ? (
             <>
-              {hasActiveFilters ? (
-                <>
-                  <Link className="button" href={exportXlsxHref}>Exportar Excel filtrado</Link>
-                  <Link className="button" href={exportPdfHref}>Exportar PDF filtrado</Link>
-                </>
-              ) : null}
-              <Link className="button secondary" href="/admin/users">Usuarios</Link>
-              <Link className="button secondary" href={"/admin/settings/photos" as unknown as Route}>Fotos</Link>
-              <Link className="button secondary" href="/admin/settings/email">Correo</Link>
+              <Link className="button" href={exportXlsxHref}>Exportar Excel filtrado</Link>
+              <Link className="button" href={exportPdfHref}>Exportar PDF filtrado</Link>
             </>
+          ) : null}
+          <Link className="button secondary" href={"/admin/settings/photos" as unknown as Route}>Fotos</Link>
+          <Link className="button secondary" href="/admin/settings/email">Correo</Link>
+          <Link className="button secondary" href={"/admin/account/password" as unknown as Route}>Contraseña</Link>
+          {admin.role === ADMIN_ROLE.SUPER_ADMIN ? (
+            <Link className="button secondary" href="/admin/users">Usuarios</Link>
           ) : null}
           <form action={logoutAction}><button className="secondary" type="submit">Salir</button></form>
         </div>
@@ -129,35 +128,33 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         </aside>
       ) : null}
 
-      {admin.role === ADMIN_ROLE.SUPER_ADMIN ? (
-        <section className="card grid" aria-label="Exportar reportes">
-          <div className="section-heading">
-            <h2>Exportar por rango de fechas</h2>
-            <p className="muted">
-              Seleccioná un rango de fechas para evitar reportes demasiado grandes. Los botones superiores exportan solo la vista filtrada actual.
-            </p>
-          </div>
-          <form action="/api/export" method="get" className="grid">
-            <div className="grid two">
-              <label>Desde
-                <input name="from" type="date" max={today} required />
-              </label>
-              <label>Hasta
-                <input name="to" type="date" max={today} required />
-              </label>
-            </div>
-            <div className="actions">
-              <button type="submit" name="format" value="xlsx">Exportar Excel por rango</button>
-              <button type="submit" name="format" value="pdf" className="secondary">Exportar PDF por rango</button>
-            </div>
-          </form>
-          <p className="notice muted-notice" role="note">
-            {hasActiveFilters
-              ? "Los botones superiores exportan con los filtros activos del dashboard. Esta sección genera un reporte por rango de fechas independiente."
-              : "Para exportar, aplicá un filtro en la vista o generá un reporte por rango de fechas."}
+      <section className="card grid" aria-label="Exportar reportes">
+        <div className="section-heading">
+          <h2>Exportar por rango de fechas</h2>
+          <p className="muted">
+            Seleccioná un rango de fechas para evitar reportes demasiado grandes. Los botones superiores exportan solo la vista filtrada actual.
           </p>
-        </section>
-      ) : null}
+        </div>
+        <form action="/api/export" method="get" className="grid">
+          <div className="grid two">
+            <label>Desde
+              <input name="from" type="date" max={today} required />
+            </label>
+            <label>Hasta
+              <input name="to" type="date" max={today} required />
+            </label>
+          </div>
+          <div className="actions">
+            <button type="submit" name="format" value="xlsx">Exportar Excel por rango</button>
+            <button type="submit" name="format" value="pdf" className="secondary">Exportar PDF por rango</button>
+          </div>
+        </form>
+        <p className="notice muted-notice" role="note">
+          {hasActiveFilters
+            ? "Los botones superiores exportan con los filtros activos del dashboard. Esta sección genera un reporte por rango de fechas independiente."
+            : "Para exportar, aplicá un filtro en la vista o generá un reporte por rango de fechas."}
+        </p>
+      </section>
 
       <section className="dashboard-summary" aria-label="Resumen de reservas">
         <article className="summary-card">
