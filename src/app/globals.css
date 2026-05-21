@@ -810,6 +810,39 @@ button:disabled {
 .reason-picker textarea { resize: vertical; min-height: 60px; }
 .reason-picker-custom { margin-top: 2px; }
 
+.admin-shell select,
+.reason-picker select {
+  color: var(--fg);
+  background: rgba(8, 6, 4, .92);
+  border-color: var(--border);
+  color-scheme: dark;
+}
+
+.admin-shell select:focus,
+.reason-picker select:focus {
+  background: rgba(8, 6, 4, .98);
+}
+
+.admin-shell select option,
+.reason-picker select option,
+.admin-shell select optgroup,
+.reason-picker select optgroup {
+  color: var(--fg);
+  background: #18120c;
+}
+
+.admin-shell select option:checked,
+.reason-picker select option:checked {
+  color: #18120c;
+  background: var(--brand);
+  font-weight: 800;
+}
+
+.admin-shell select option:disabled,
+.reason-picker select option:disabled {
+  color: var(--muted);
+}
+
 @media (max-width: 640px) {
   .action-form { min-width: 0; width: 100%; }
   .action-form button { justify-self: stretch; width: 100%; }
