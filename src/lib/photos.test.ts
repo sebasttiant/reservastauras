@@ -85,6 +85,20 @@ describe("validateImageFile", () => {
     }
   });
 
+  it("accepts jpg/jpeg uploads even when the browser sends image/jpg", async () => {
+    const { validateImageFile } = await import("@/lib/photos");
+    const blob = new Blob([new Uint8Array([0xFF, 0xD8, 0xFF, 0x00])], { type: "image/jpg" });
+    const file = new File([blob], "photo.jpeg", { type: "image/jpg" });
+    Object.defineProperty(file, "size", { value: 1024 });
+
+    const result = await validateImageFile(file);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.ext).toBe(".jpg");
+      expect(result.mime).toBe("image/jpg");
+    }
+  });
+
   it("accepts a valid PNG under 2MB", async () => {
     const { validateImageFile } = await import("@/lib/photos");
     const blob = new Blob([new Uint8Array([0x89, 0x50, 0x4E, 0x47])], { type: "image/png" });
@@ -187,6 +201,24 @@ describe("saveZonePhoto", () => {
     expect(result).toBe("/uploads/zones/tauras-default/terraza.jpg");
     expect(mkdir).toHaveBeenCalledOnce();
     expect(writeFile).toHaveBeenCalledOnce();
+  });
+});
+
+describe("resolveZonePhotoPath", () => {
+  it("resolves upload URLs below the configured upload directory", async () => {
+    const { resolveZonePhotoPath } = await import("@/lib/photos");
+
+    expect(resolveZonePhotoPath("/data", "/uploads/zones/tauras-default/terraza.jpg")).toBe(
+      "/data/uploads/zones/tauras-default/terraza.jpg",
+    );
+  });
+
+  it("rejects traversal outside the configured upload directory", async () => {
+    const { resolveZonePhotoPath } = await import("@/lib/photos");
+
+    expect(() => resolveZonePhotoPath("/data", "/uploads/zones/tauras-default/../../secret.jpg")).toThrow(
+      "Invalid upload path",
+    );
   });
 });
 

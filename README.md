@@ -57,6 +57,8 @@ Editá al menos:
 
 `DATABASE_URL` por default apunta a `localhost:5432` para `pnpm dev`. El servicio `web` del `docker-compose.yml` reescribe la URL para usar la red interna `db:5432`, así que no hace falta cambiarla para el flujo full-docker.
 
+Las fotos subidas desde el admin se guardan debajo de `$UPLOAD_DIR/uploads/zones` y se sirven con URL pública `/uploads/zones/...`. En Docker, `UPLOAD_DIR` queda en `/app/public` por default y el compose monta el volumen persistente `uploads-data` en `/app/public/uploads`; no quites ese volumen o las fotos subidas se perderán al recrear el contenedor.
+
 ## Desarrollo local (Postgres en Docker, Next en host)
 
 ```bash
@@ -81,6 +83,15 @@ docker compose up --build
 
 El servicio `web` espera el healthcheck de `db`. Las migraciones de producción se ejecutan explícitamente al arrancar el contenedor con `pnpm db:migrate` antes de iniciar Next. La seed NO corre automáticamente en el startup productivo; ejecutala manualmente solo cuando necesites crear el admin inicial (ej: `docker compose exec web pnpm db:seed`).
 
+Para sembrar las fotos locales de `fotos/` en las zonas esperadas, copiarlas al volumen de uploads y actualizar `Zone.imagePath`, ejecutá manualmente:
+
+```bash
+docker compose cp fotos web:/app/fotos
+docker compose exec web pnpm photos:seed --confirm-seed-zone-photos
+```
+
+El script es determinístico: mapea las imágenes `.jpeg` de `fotos/` a `/uploads/zones/<sede>/<zona>.jpg`, exige confirmación explícita y no sobreescribe archivos ya existentes en disco.
+
 ## Comandos útiles
 
 ```bash
@@ -90,6 +101,7 @@ pnpm test
 pnpm db:generate
 pnpm db:migrate
 pnpm db:seed
+pnpm photos:seed --confirm-seed-zone-photos
 ```
 
 ### Limpiar reservas de prueba

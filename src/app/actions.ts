@@ -33,6 +33,7 @@ import {
   saveZonePhoto,
   deleteZonePhoto,
   toAreaSlug,
+  getUploadDir,
 } from "@/lib/photos";
 
 function toDateOnly(value: string): Date {
@@ -61,6 +62,17 @@ function redirectWithError(path: string, errorKey: string): never {
 function redirectWithSuccess(path: string, key: string): never {
   const query = new URLSearchParams({ ok: key });
   redirect(`${path}?${query.toString()}` as Route);
+}
+
+async function findAreaImagePathForEmail(locationId: string | null | undefined, area: string | null): Promise<string | null> {
+  if (!locationId || !area) return null;
+
+  const zone = await prisma.zone.findUnique({
+    where: { locationId_areaValue: { locationId, areaValue: area } },
+    select: { imagePath: true },
+  });
+
+  return zone?.imagePath ?? null;
 }
 
 // Construye el redirect público preservando SOLO un `lang` ya saneado.
@@ -413,6 +425,7 @@ export async function confirmReservationAction(formData: FormData): Promise<void
   });
 
   try {
+    const areaImagePath = await findAreaImagePathForEmail(confirmed.locationId, confirmed.area);
     await sendReservationConfirmationEmail({
       to: confirmed.user.email,
       name: confirmed.user.name,
@@ -420,6 +433,7 @@ export async function confirmReservationAction(formData: FormData): Promise<void
       reservationTime: confirmed.reservationTime,
       area: confirmed.area,
       location: confirmed.location,
+      areaImagePath,
       confirmedByName: admin.name,
       confirmedByEmail: admin.email,
       language: parsePublicLanguage(confirmed.customerLanguage),
@@ -480,6 +494,7 @@ export async function resendConfirmationEmailAction(formData: FormData): Promise
   const securityContext = getRequestSecurityContext(requestHeaders);
 
   try {
+    const areaImagePath = await findAreaImagePathForEmail(reservation.locationId, reservation.area);
     await sendReservationConfirmationEmail({
       to: reservation.user.email,
       name: reservation.user.name,
@@ -487,6 +502,7 @@ export async function resendConfirmationEmailAction(formData: FormData): Promise
       reservationTime: reservation.reservationTime,
       area: reservation.area,
       location: reservation.location,
+      areaImagePath,
       confirmedByName: responsibleName,
       confirmedByEmail: responsibleEmail,
       language: parsePublicLanguage(reservation.customerLanguage),
@@ -590,6 +606,7 @@ export async function rejectReservationAction(formData: FormData): Promise<void>
   });
 
   try {
+    const areaImagePath = await findAreaImagePathForEmail(rejected.locationId, rejected.area);
     await sendReservationRejectionEmail({
       to: rejected.user.email,
       name: rejected.user.name,
@@ -597,6 +614,7 @@ export async function rejectReservationAction(formData: FormData): Promise<void>
       reservationTime: rejected.reservationTime,
       area: rejected.area,
       location: rejected.location,
+      areaImagePath,
       reason: reason ?? undefined,
       language: parsePublicLanguage(rejected.customerLanguage),
     });
@@ -643,7 +661,7 @@ export async function uploadZonePhotoAction(formData: FormData): Promise<void> {
   if (!areaSlug) {
     redirectWithError("/admin/settings/photos", "invalid-data");
   }
-  const uploadDir = process.env.UPLOAD_DIR ?? "public";
+  const uploadDir = getUploadDir();
 
   const existingZone = await prisma.zone.findUnique({
     where: { locationId_areaValue: { locationId, areaValue } },
@@ -692,7 +710,7 @@ export async function deleteZonePhotoAction(formData: FormData): Promise<void> {
     redirectWithError("/admin/settings/photos", "not-found");
   }
 
-  const uploadDir = process.env.UPLOAD_DIR ?? "public";
+  const uploadDir = getUploadDir();
   await deleteZonePhoto(uploadDir, zone.imagePath);
 
   await prisma.zone.update({
@@ -768,6 +786,7 @@ export async function cancelReservationAction(formData: FormData): Promise<void>
   });
 
   try {
+    const areaImagePath = await findAreaImagePathForEmail(cancelled.locationId, cancelled.area);
     await sendReservationCancellationEmail({
       to: cancelled.user.email,
       name: cancelled.user.name,
@@ -775,6 +794,7 @@ export async function cancelReservationAction(formData: FormData): Promise<void>
       reservationTime: cancelled.reservationTime,
       area: cancelled.area,
       location: cancelled.location,
+      areaImagePath,
       language: parsePublicLanguage(cancelled.customerLanguage),
     });
   } catch (error: unknown) {

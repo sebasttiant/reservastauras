@@ -4,9 +4,12 @@ const mocks = vi.hoisted(() => ({
   sendMail: vi.fn(),
   createTransport: vi.fn(),
   getEnv: vi.fn(),
+  existsSync: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
+
+vi.mock("node:fs", () => ({ existsSync: mocks.existsSync }));
 
 vi.mock("nodemailer", () => ({
   default: { createTransport: mocks.createTransport },
@@ -31,6 +34,7 @@ function lastSentMail(): CapturedMail {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.existsSync.mockReturnValue(false);
   mocks.sendMail.mockResolvedValue(undefined);
   mocks.createTransport.mockReturnValue({ sendMail: mocks.sendMail });
   mocks.getEnv.mockReturnValue({
@@ -77,7 +81,11 @@ describe("sendReservationConfirmationEmail", () => {
     expect(html).toContain("Sede");
     expect(html).toContain("TAURAS Steakhouse");
     expect(html).toContain("Calle 123");
-    expect(html).toContain("https://wa.me/573001234567");
+    expect(html).toContain("¿Necesitas ayuda con tu reserva?");
+    expect(html).toContain("Escribir por WhatsApp");
+    expect(html).toContain("+57 300 123 4567");
+    expect(html).toContain('href="https://wa.me/573001234567"');
+    expect(html).not.toContain(">https://wa.me/573001234567<");
     expect(html).toContain("Sector");
     expect(html).toContain("Confirmado por");
     expect(html).toContain("Todos los derechos reservados.");
@@ -113,6 +121,8 @@ describe("sendReservationConfirmationEmail", () => {
     expect(html).toContain("Time");
     expect(html).toContain("Location");
     expect(html).toContain("Area");
+    expect(html).toContain("Need help with your reservation?");
+    expect(html).toContain("Message us on WhatsApp");
     expect(html).toContain("Confirmed by");
     expect(html).toContain("All rights reserved.");
 
@@ -141,6 +151,56 @@ describe("sendReservationConfirmationEmail", () => {
     const html = lastSentMail().html ?? "";
     expect(html).toContain("&lt;script&gt;");
     expect(html).not.toContain("<script>alert");
+  });
+
+  it("embeds the uploaded area photo as a CID attachment when the uploaded file exists", async () => {
+    mocks.existsSync.mockReturnValue(true);
+    const { sendReservationConfirmationEmail } = await import("@/lib/email");
+    await sendReservationConfirmationEmail({
+      to: "cliente@tauras.test",
+      name: "Cliente Tauras",
+      reservationDate: FIXED_DATE,
+      reservationTime: "20:00",
+      area: "Terraza",
+      areaImagePath: "/uploads/zones/tauras-default/terraza.jpg",
+      location: EMAIL_LOCATION,
+      confirmedByName: "Admin",
+      confirmedByEmail: "admin@tauras.test",
+      language: "es",
+    });
+
+    const mail = lastSentMail();
+    const html = mail.html ?? "";
+    expect(html).toContain('src="cid:reservation-area"');
+    expect(html).toContain("Sector reservado en TAURAS");
+    expect(mail.attachments).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        filename: "terraza.jpg",
+        cid: "reservation-area",
+      }),
+    ]));
+  });
+
+  it("does not render uploaded area photos from unsafe or missing relative paths", async () => {
+    const { sendReservationConfirmationEmail } = await import("@/lib/email");
+    await sendReservationConfirmationEmail({
+      to: "cliente@tauras.test",
+      name: "Cliente Tauras",
+      reservationDate: FIXED_DATE,
+      reservationTime: "20:00",
+      area: "Terraza",
+      areaImagePath: "/admin/secret.jpg",
+      location: EMAIL_LOCATION,
+      confirmedByName: "Admin",
+      confirmedByEmail: "admin@tauras.test",
+      language: "es",
+    });
+
+    const mail = lastSentMail();
+    expect(mail.html ?? "").not.toContain("cid:reservation-area");
+    expect(mail.attachments).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ cid: "reservation-area" }),
+    ]));
   });
 
   it("escapes HTML in the area / sector value", async () => {

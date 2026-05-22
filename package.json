@@ -21,6 +21,7 @@
     "db:dev": "prisma migrate dev",
     "db:seed": "tsx --env-file-if-exists=.env prisma/seed.ts",
     "db:clear-reservations": "tsx --env-file-if-exists=.env scripts/clear-reservations.ts",
+    "photos:seed": "tsx --env-file-if-exists=.env scripts/seed-zone-photos.ts",
     "scripts:check-env": "tsx scripts/check-env.ts",
     "scripts:purge-login-attempts": "tsx scripts/purge-login-attempts.ts"
   },

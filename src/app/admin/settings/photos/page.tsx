@@ -105,10 +105,10 @@ export default async function AdminPhotosPage({ searchParams }: PhotosPageProps)
                 )}
                 <div className="zone-card-actions">
                   <span className="zone-preview-name">{zone.areaValue}</span>
-                  <form action={uploadZonePhotoAction}>
+                  <form action={uploadZonePhotoAction} encType="multipart/form-data">
                     <input type="hidden" name="locationId" value={location.id} />
                     <input type="hidden" name="areaValue" value={zone.areaValue} />
-                    <input type="file" name="file" accept="image/jpeg,image/png,image/webp" required />
+                    <input type="file" name="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" required />
                     <button type="submit">{zone.imagePath ? "Reemplazar" : "Subir foto"}</button>
                   </form>
                   {zone.imagePath ? (

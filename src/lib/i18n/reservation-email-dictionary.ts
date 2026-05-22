@@ -21,6 +21,14 @@ export interface ReservationEmailLabels {
   reason: string;
 }
 
+export interface ReservationEmailContactCopy {
+  title: string;
+  intro: string;
+  button: string;
+  phonePrefix: string;
+  imageAlt: string;
+}
+
 export interface ReservationEmailKindCopy {
   // PLAIN — usado en el subject de nodemailer y como `<h2>` (escapado al render).
   subject: string;
@@ -40,6 +48,7 @@ export interface ReservationEmailCopy {
   // PLAIN — frase final del footer; el template arma "© <year> TAURAS Steakhouse. <rightsReserved>".
   rightsReserved: string;
   labels: ReservationEmailLabels;
+  contact: ReservationEmailContactCopy;
   confirmation: ReservationEmailKindCopy;
   rejection: ReservationEmailKindCopy;
   cancellation: ReservationEmailKindCopy;
@@ -62,6 +71,13 @@ export const RESERVATION_EMAIL_COPY: Record<PublicLanguage, ReservationEmailCopy
       whatsapp: "WhatsApp",
       confirmedBy: "Confirmado por",
       reason: "Motivo",
+    },
+    contact: {
+      title: "¿Necesitas ayuda con tu reserva?",
+      intro: "Nuestro equipo puede ayudarte por WhatsApp con cambios, dudas o indicaciones para tu visita.",
+      button: "Escribir por WhatsApp",
+      phonePrefix: "También puedes llamarnos al",
+      imageAlt: "Sector reservado en TAURAS",
     },
     confirmation: {
       subject: "Tu reserva en TAURAS ha sido confirmada",
@@ -98,6 +114,13 @@ export const RESERVATION_EMAIL_COPY: Record<PublicLanguage, ReservationEmailCopy
       whatsapp: "WhatsApp",
       confirmedBy: "Confirmed by",
       reason: "Reason",
+    },
+    contact: {
+      title: "Need help with your reservation?",
+      intro: "Our team can help you on WhatsApp with changes, questions, or directions for your visit.",
+      button: "Message us on WhatsApp",
+      phonePrefix: "You can also call us at",
+      imageAlt: "Reserved area at TAURAS",
     },
     confirmation: {
       subject: "Your TAURAS reservation has been confirmed",
