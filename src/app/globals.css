@@ -59,8 +59,8 @@ h2 { color: var(--brand); font-size: clamp(1.45rem, 4vw, 2rem); line-height: 1.0
 
 .hero-shell {
   display: grid;
-  grid-template-columns: minmax(0, .95fr) minmax(320px, 520px);
-  gap: clamp(20px, 5vw, 56px);
+  grid-template-columns: minmax(0, .9fr) minmax(300px, 480px);
+  gap: clamp(18px, 4vw, 44px);
   align-items: center;
 }
 
@@ -518,6 +518,17 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   border: 1px solid var(--border);
   border-radius: 14px;
   overflow: hidden;
+  align-self: start;
+  background: var(--card-soft);
+}
+
+.zone-preview-image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  max-height: 220px;
+  object-fit: cover;
+  object-position: center;
 }
 
 .zone-preview-card {
@@ -1043,6 +1054,7 @@ dd { margin: 4px 0 0; }
   .hero-shell, .two, .three { grid-template-columns: 1fr; }
   .hero { min-height: auto; }
   .hero-copy { text-align: left; }
+  .zone-preview-image { max-height: 180px; }
   .admin-header { align-items: stretch; flex-direction: column; }
   .dashboard-summary { grid-template-columns: 1fr; }
   .detail-hero { flex-direction: column; }
