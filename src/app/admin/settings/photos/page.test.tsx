@@ -61,6 +61,29 @@ function setupAutoSeedScenario(): void {
     }
     return zoneStore[locationId].find((z) => z.areaValue === areaValue)!;
   });
+
+  // Pre-seed all canonical zones as if they had been uploaded previously.
+  // This matches the previous behavior of ensureZoneRows() but now done explicitly
+  // in tests (or via uploads in real usage).
+  const locations = [
+    { id: "loc-1", slug: "tauras-default", name: "TAURAS Steakhouse" },
+    { id: "loc-2", slug: "tauras-bar-lounge", name: "TAURAS Bar & Lounge" },
+  ];
+  const areaValuesBySlug: Record<string, string[]> = {
+    "tauras-default": ["Cualquier Mesa Disponible", "Terraza", "Pasillo", "Patio", "Barra"],
+    "tauras-bar-lounge": ["Tauras Bar & Lounge"],
+  };
+  locations.forEach((loc) => {
+    const areas = areaValuesBySlug[loc.slug] ?? [];
+    areas.forEach((area) => {
+      zoneStore[loc.id] = zoneStore[loc.id] ?? [];
+      zoneStore[loc.id].push({
+        id: `z-${area}`,
+        areaValue: area,
+        imagePath: null, // initially no image
+      });
+    });
+  });
 }
 
 async function renderPhotosPage(searchParams: Record<string, string | undefined> = {}): Promise<string> {
@@ -120,7 +143,7 @@ describe("AdminSettingsPhotosPage", () => {
   it("shows error message when error query param matches PHOTO_ERROR_MESSAGES", async () => {
     const html = await renderPhotosPage({ error: "photo-too-large" });
 
-    expect(html).toContain("El archivo supera los 2MB");
+    expect(html).toContain("El archivo supera los 10MB");
   });
 
   it("ignores unknown error keys", async () => {

@@ -81,7 +81,7 @@ export type PhotoSuccessKey = keyof typeof PHOTO_SUCCESS_MESSAGES;
 
 export const PHOTO_ERROR_MESSAGES = {
   "invalid-data": "Datos inválidos. Revisá el formulario.",
-  "photo-too-large": "El archivo supera los 2MB.",
+  "photo-too-large": "El archivo supera los 10MB.",
   "unsupported-photo": "Formato no soportado. Usá JPEG, PNG o WebP.",
   "not-found": "Foto no encontrada.",
 } as const;

@@ -92,6 +92,14 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   output: "standalone",
   typedRoutes: true,
+  experimental: {
+    // Admin zone-photo uploads accept files up to 10MB. Server Actions default to
+    // a 1MB request body limit, so multipart uploads above that crashed before
+    // our own validation could return the friendly "photo-too-large" message.
+    serverActions: {
+      bodySizeLimit: "12mb",
+    },
+  },
   turbopack: {
     root: projectRoot,
   },

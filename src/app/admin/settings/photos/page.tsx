@@ -17,35 +17,14 @@ interface PhotosPageProps {
   searchParams: Promise<Record<string, string | undefined>>;
 }
 
+interface ZonePhotoView {
+  id: string;
+  areaValue: string;
+  imagePath: string | null;
+}
+
 export const metadata = { title: "Fotos de zonas · Reservas Tauras" };
 export const dynamic = "force-dynamic";
-
-async function ensureZoneRows(locationId: string, slug: string): Promise<void> {
-  // Side effect intencional: mantiene la tabla Zone sincronizada con la config
-  // canónica de áreas sin pisar imagePath ni requerir una pantalla separada de
-  // administración de zonas.
-  const areas = LOCATION_AREA_VALUES[slug];
-  if (!areas) return;
-
-  const existing = await prisma.zone.findMany({
-    where: { locationId },
-    select: { areaValue: true },
-  });
-  const existingSet = new Set(existing.map((z) => z.areaValue));
-
-  const missing = areas.filter((a) => !existingSet.has(a));
-  if (missing.length === 0) return;
-
-  await Promise.all(
-    missing.map((areaValue) =>
-      prisma.zone.upsert({
-        where: { locationId_areaValue: { locationId, areaValue } },
-        update: {},
-        create: { locationId, areaValue },
-      }),
-    ),
-  );
-}
 
 export default async function AdminPhotosPage({ searchParams }: PhotosPageProps) {
   await requireAdmin();
@@ -57,13 +36,24 @@ export default async function AdminPhotosPage({ searchParams }: PhotosPageProps)
 
   const locationsWithZones = await Promise.all(
     locations.map(async (loc) => {
-      await ensureZoneRows(loc.id, loc.slug);
       const zones = await prisma.zone.findMany({
         where: { locationId: loc.id },
         select: { id: true, areaValue: true, imagePath: true },
         orderBy: { createdAt: "asc" },
       });
-      return { ...loc, zones };
+      const zonesByArea = new Map(zones.map((zone) => [zone.areaValue, zone]));
+      const canonicalAreas = LOCATION_AREA_VALUES[loc.slug] ?? [];
+      const canonicalZones: ZonePhotoView[] = canonicalAreas.map((areaValue) => {
+        const existing = zonesByArea.get(areaValue);
+        return {
+          id: existing?.id ?? `${loc.id}:${areaValue}`,
+          areaValue,
+          imagePath: existing?.imagePath ?? null,
+        };
+      });
+      const customZones = zones.filter((zone) => !canonicalAreas.includes(zone.areaValue));
+
+      return { ...loc, zones: [...canonicalZones, ...customZones] };
     }),
   );
 

@@ -2,9 +2,13 @@ import "server-only";
 import { writeFile, unlink, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import sharp from "sharp";
 
 const ALLOWED_MIME_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"] as const;
-const MAX_FILE_SIZE = 2 * 1024 * 1024;
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const ZONE_PHOTO_WIDTH = 1600;
+const ZONE_PHOTO_HEIGHT = 1000;
+const ZONE_PHOTO_WEBP_QUALITY = 82;
 export const UPLOADS_PUBLIC_PREFIX = "/uploads/zones/";
 
 const MAGIC_BYTE_MAP: Record<string, readonly number[]> = {
@@ -102,6 +106,26 @@ export async function validateImageFile(file: File): Promise<PhotoValidation> {
   }
 
   return { ok: true, buffer, ext, mime: file.type };
+}
+
+export async function processZonePhoto(buffer: Buffer): Promise<{ buffer: Buffer; ext: string; mime: string }> {
+  try {
+    const processed = await sharp(buffer, { failOn: "warning" })
+      .rotate()
+      // Zone photos are displayed as wide cards. Normalize every upload to a
+      // fixed 16:10 frame at upload time so page render stays cheap and stable.
+      .resize(ZONE_PHOTO_WIDTH, ZONE_PHOTO_HEIGHT, {
+        fit: "cover",
+        position: "attention",
+        withoutEnlargement: false,
+      })
+      .webp({ quality: ZONE_PHOTO_WEBP_QUALITY, effort: 4 })
+      .toBuffer();
+
+    return { buffer: processed, ext: ".webp", mime: "image/webp" };
+  } catch {
+    throw new Error("unsupported-photo");
+  }
 }
 
 export async function saveZonePhoto(
