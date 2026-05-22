@@ -96,6 +96,7 @@ describe("AdminSettingsPhotosPage", () => {
     expect(html).toContain('name="locationId"');
     expect(html).toContain('name="areaValue"');
     expect(html).toContain('type="file"');
+    expect(html).toContain('accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"');
     expect(html).toContain("Subir foto");
   });
 

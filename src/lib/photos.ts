@@ -3,18 +3,20 @@ import { writeFile, unlink, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 
-const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+const ALLOWED_MIME_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"] as const;
 const MAX_FILE_SIZE = 2 * 1024 * 1024;
-const UPLOADS_PUBLIC_PREFIX = "/uploads/zones/";
+export const UPLOADS_PUBLIC_PREFIX = "/uploads/zones/";
 
 const MAGIC_BYTE_MAP: Record<string, readonly number[]> = {
   "image/jpeg": [0xFF, 0xD8, 0xFF],
+  "image/jpg": [0xFF, 0xD8, 0xFF],
   "image/png": [0x89, 0x50, 0x4E, 0x47],
   "image/webp": [0x52, 0x49, 0x46, 0x46],
 };
 
 const MIME_TO_EXT: Record<string, string> = {
   "image/jpeg": ".jpg",
+  "image/jpg": ".jpg",
   "image/png": ".png",
   "image/webp": ".webp",
 };
@@ -39,11 +41,15 @@ function assertSafeSegment(value: string, label: string): void {
   }
 }
 
+export function getUploadDir(): string {
+  return process.env.UPLOAD_DIR ?? "public";
+}
+
 function resolveUploadBase(uploadDir: string): string {
   return path.resolve(uploadDir, "uploads", "zones");
 }
 
-function resolveZonePhotoPath(uploadDir: string, relativePath: string): string {
+export function resolveZonePhotoPath(uploadDir: string, relativePath: string): string {
   if (!relativePath.startsWith(UPLOADS_PUBLIC_PREFIX)) {
     throw new Error("Invalid upload path");
   }

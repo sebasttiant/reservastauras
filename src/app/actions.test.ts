@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   saveZonePhoto: vi.fn(),
   deleteZonePhoto: vi.fn(),
   toAreaSlug: vi.fn(),
+  getUploadDir: vi.fn(),
   zoneFindUnique: vi.fn(),
   zoneUpsert: vi.fn(),
   zoneUpdate: vi.fn(),
@@ -111,6 +112,7 @@ vi.mock("@/lib/photos", () => ({
   saveZonePhoto: mocks.saveZonePhoto,
   deleteZonePhoto: mocks.deleteZonePhoto,
   toAreaSlug: mocks.toAreaSlug,
+  getUploadDir: mocks.getUploadDir,
 }));
 
 describe("confirmReservationAction", () => {
@@ -129,6 +131,7 @@ describe("confirmReservationAction", () => {
     mocks.sendReservationConfirmationEmail.mockResolvedValue(undefined);
     mocks.sendReservationRejectionEmail.mockResolvedValue(undefined);
     mocks.sendReservationCancellationEmail.mockResolvedValue(undefined);
+    mocks.zoneFindUnique.mockResolvedValue(null);
     mocks.redirect.mockImplementation((url: string) => {
       throw new Error(`redirect:${url}`);
     });
@@ -139,6 +142,7 @@ describe("confirmReservationAction", () => {
     const pendingReservation = {
       id: "reservation-1",
       userId: "user-1",
+      locationId: "location-1",
       reservationDate,
       reservationTime: "20:00",
       area: "Patio",
@@ -208,6 +212,7 @@ describe("confirmReservationAction", () => {
     const pendingReservation = {
       id: "reservation-1",
       userId: "user-1",
+      locationId: "location-1",
       reservationDate,
       reservationTime: "20:00",
       area: "Patio",
@@ -280,6 +285,25 @@ describe("confirmReservationAction", () => {
     const [arg] = mocks.sendReservationConfirmationEmail.mock.calls[0] as [{ language: string }];
     expect(arg.language).toBe("en");
   });
+
+  it("passes the uploaded zone image path to the confirmation email when the reserved area has one", async () => {
+    buildConfirmFixtures("es");
+    mocks.zoneFindUnique.mockResolvedValue({ imagePath: "/uploads/zones/tauras-default/patio.jpg" });
+    const formData = new FormData();
+    formData.set("reservationId", "reservation-1");
+
+    const { confirmReservationAction } = await import("@/app/actions");
+    await expect(confirmReservationAction(formData)).rejects.toThrow(
+      "redirect:/admin/reservations/reservation-1?ok=confirmed",
+    );
+
+    expect(mocks.zoneFindUnique).toHaveBeenCalledWith({
+      where: { locationId_areaValue: { locationId: "location-1", areaValue: "Patio" } },
+      select: { imagePath: true },
+    });
+    const [arg] = mocks.sendReservationConfirmationEmail.mock.calls[0] as [{ areaImagePath?: string | null }];
+    expect(arg.areaImagePath).toBe("/uploads/zones/tauras-default/patio.jpg");
+  });
 });
 
 describe("resendConfirmationEmailAction", () => {
@@ -339,6 +363,7 @@ describe("resendConfirmationEmailAction", () => {
     mocks.recordAuditLog.mockResolvedValue(undefined);
     mocks.sendReservationConfirmationEmail.mockResolvedValue(undefined);
     mocks.reservationUpdate.mockResolvedValue({ id: "reservation-resend-1" });
+    mocks.zoneFindUnique.mockResolvedValue(null);
     mocks.redirect.mockImplementation((url: string) => {
       throw new Error(`redirect:${url}`);
     });
@@ -511,6 +536,7 @@ describe("rejectReservationAction (bilingual email wiring)", () => {
     mocks.getRequestSecurityContext.mockReturnValue({ ip: "127.0.0.1", userAgent: "vitest" });
     mocks.recordAuditLog.mockResolvedValue(undefined);
     mocks.sendReservationRejectionEmail.mockResolvedValue(undefined);
+    mocks.zoneFindUnique.mockResolvedValue(null);
     mocks.transaction.mockImplementation(async (callback: (transactionClient: {
       reservation: { findUnique: typeof mocks.reservationFindUnique; update: typeof mocks.reservationUpdate };
     }) => Promise<unknown>) => callback({
@@ -666,6 +692,7 @@ describe("cancelReservationAction (bilingual email wiring)", () => {
     mocks.getRequestSecurityContext.mockReturnValue({ ip: "127.0.0.1", userAgent: "vitest" });
     mocks.recordAuditLog.mockResolvedValue(undefined);
     mocks.sendReservationCancellationEmail.mockResolvedValue(undefined);
+    mocks.zoneFindUnique.mockResolvedValue(null);
     mocks.transaction.mockImplementation(async (callback: (transactionClient: {
       reservation: { findUnique: typeof mocks.reservationFindUnique; update: typeof mocks.reservationUpdate };
     }) => Promise<unknown>) => callback({
@@ -1117,6 +1144,7 @@ describe("uploadZonePhotoAction", () => {
     mocks.isValidAdminMutationOrigin.mockReturnValue(true);
     mocks.getRequestSecurityContext.mockReturnValue({ ip: "127.0.0.1", userAgent: "vitest" });
     mocks.recordAuditLog.mockResolvedValue(undefined);
+    mocks.getUploadDir.mockReturnValue("public");
     mocks.toAreaSlug.mockImplementation((val: string) => val.toLowerCase().replace(/\s+/g, "-"));
     mocks.saveZonePhoto.mockResolvedValue("/uploads/zones/tauras-default/terraza.jpg");
     mocks.locationFindUnique.mockResolvedValue({ id: "loc-1", slug: "tauras-default" });

@@ -1,4 +1,5 @@
 import "server-only";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import nodemailer from "nodemailer";
 import { getEnv } from "@/lib/env";
@@ -17,6 +18,7 @@ export interface ConfirmationEmailInput {
   reservationTime: string;
   area: string | null;
   location: ReservationLocationEmailInfo;
+  areaImagePath?: string | null;
   confirmedByName: string;
   confirmedByEmail: string;
   language: PublicLanguage;
@@ -29,6 +31,7 @@ export interface RejectionEmailInput {
   reservationTime: string;
   area: string | null;
   location: ReservationLocationEmailInfo;
+  areaImagePath?: string | null;
   reason?: string;
   language: PublicLanguage;
 }
@@ -40,7 +43,14 @@ export interface CancellationEmailInput {
   reservationTime: string;
   area: string | null;
   location: ReservationLocationEmailInfo;
+  areaImagePath?: string | null;
   language: PublicLanguage;
+}
+
+interface MailAttachment {
+  filename: string;
+  path: string;
+  cid: string;
 }
 
 interface ReservationEmailTemplateInput {
@@ -55,6 +65,8 @@ interface ReservationEmailTemplateInput {
 }
 
 const TAURAS_LOGO_CID = "tauras-logo";
+const AREA_IMAGE_CID = "reservation-area";
+const UPLOADS_PUBLIC_PREFIX = "/uploads/zones/";
 
 function createTransporter() {
   const env = getEnv();
@@ -92,8 +104,28 @@ function formatReservationDate(date: Date, locale: ReservationEmailCopy["dateLoc
   });
 }
 
-function buildLogoAttachments() {
+function buildLogoAttachments(): MailAttachment[] {
   return [{ filename: "tauras.png", path: path.join(process.cwd(), "public", "tauras.png"), cid: TAURAS_LOGO_CID }];
+}
+
+function resolveUploadAttachmentPath(relativePath: string): string | null {
+  if (!relativePath.startsWith(UPLOADS_PUBLIC_PREFIX)) return null;
+
+  const uploadDir = process.env.UPLOAD_DIR ?? "public";
+  const basePath = path.resolve(uploadDir, "uploads", "zones");
+  const suffix = relativePath.slice(UPLOADS_PUBLIC_PREFIX.length);
+  const absolutePath = path.resolve(basePath, suffix);
+
+  if (absolutePath !== basePath && !absolutePath.startsWith(`${basePath}${path.sep}`)) return null;
+  return existsSync(absolutePath) ? absolutePath : null;
+}
+
+function buildAreaImageAttachment(areaImagePath: string | null | undefined): MailAttachment | null {
+  if (!areaImagePath) return null;
+  const attachmentPath = resolveUploadAttachmentPath(areaImagePath);
+  if (!attachmentPath) return null;
+
+  return { filename: path.basename(attachmentPath), path: attachmentPath, cid: AREA_IMAGE_CID };
 }
 
 // IMPORTANT: `value` se interpola raw. Quien llama es responsable de pasar HTML seguro (escapado o autor-controlado). NO agregar escapeHtml acá: las filas con <strong> u otros tags de copy lo necesitan crudo.
@@ -107,7 +139,44 @@ function detailRow(label: string, value: string, withBorder = true): string {
     </tr>`;
 }
 
-function buildReservationEmailHtml(input: ReservationEmailTemplateInput): string {
+function buildContactBlock(copy: ReservationEmailCopy, location: ReservationLocationEmailInfo): string {
+  if (!location.phone && !location.whatsappUrl) return "";
+
+  const phoneLine = location.phone
+    ? `<p style="color: #4b5563; font-size: 14px; line-height: 1.5; margin: 12px 0 0 0;">${escapeHtml(copy.contact.phonePrefix)} <strong style="color: #111827;">${escapeHtml(location.phone)}</strong></p>`
+    : "";
+  const whatsappButton = location.whatsappUrl
+    ? `<a href="${escapeHtml(location.whatsappUrl)}" style="display: inline-block; background-color: #25d366; color: #ffffff; font-size: 15px; font-weight: 700; text-decoration: none; border-radius: 999px; padding: 12px 20px; margin-top: 16px;">${escapeHtml(copy.contact.button)}</a>`
+    : "";
+
+  return `
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px; margin: 22px 0;">
+      <tr>
+        <td style="padding: 20px;">
+          <p style="color: #9a3412; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 8px 0;">TAURAS</p>
+          <h3 style="color: #1a1a2e; font-size: 18px; line-height: 1.3; margin: 0 0 8px 0;">${escapeHtml(copy.contact.title)}</h3>
+          <p style="color: #4b5563; font-size: 14px; line-height: 1.6; margin: 0;">${escapeHtml(copy.contact.intro)}</p>
+          ${whatsappButton}
+          ${phoneLine}
+        </td>
+      </tr>
+    </table>`;
+}
+
+function buildAreaImageBlock(copy: ReservationEmailCopy, areaAttachment: MailAttachment | null): string {
+  if (!areaAttachment) return "";
+
+  return `
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin: 22px 0;">
+      <tr>
+        <td>
+          <img src="cid:${AREA_IMAGE_CID}" width="540" alt="${escapeHtml(copy.contact.imageAlt)}" style="display: block; width: 100%; max-width: 540px; height: auto; border: 0; border-radius: 10px; outline: none; text-decoration: none;">
+        </td>
+      </tr>
+    </table>`;
+}
+
+function buildReservationEmailHtml(input: ReservationEmailTemplateInput, areaAttachment: MailAttachment | null): string {
   const { copy, kindCopy } = input;
   const date = escapeHtml(formatReservationDate(input.reservationDate, copy.dateLocale));
   const time = escapeHtml(input.reservationTime);
@@ -116,10 +185,10 @@ function buildReservationEmailHtml(input: ReservationEmailTemplateInput): string
   const name = escapeHtml(input.greetingName);
   const contactRows = [
     input.location.address ? detailRow(copy.labels.address, escapeHtml(input.location.address)) : null,
-    input.location.phone ? detailRow(copy.labels.phone, escapeHtml(input.location.phone)) : null,
-    input.location.whatsappUrl ? detailRow(copy.labels.whatsapp, escapeHtml(input.location.whatsappUrl)) : null,
   ].filter((row): row is string => row !== null).join("");
   const extraRows = `${contactRows}${input.extraRows ?? ""}`;
+  const areaImageBlock = buildAreaImageBlock(copy, areaAttachment);
+  const contactBlock = buildContactBlock(copy, input.location);
 
   return `
 <!DOCTYPE html>
@@ -145,6 +214,7 @@ function buildReservationEmailHtml(input: ReservationEmailTemplateInput): string
                 ${escapeHtml(copy.greeting)} <strong>${name}</strong>,<br><br>
                 ${kindCopy.introHtml}
               </p>
+              ${areaImageBlock}
               <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8f8f8; border-radius: 6px; margin: 20px 0;">
                 <tr>
                   <td style="padding: 20px;">
@@ -158,6 +228,7 @@ function buildReservationEmailHtml(input: ReservationEmailTemplateInput): string
                   </td>
                 </tr>
               </table>
+              ${contactBlock}
               <p style="color: #666666; font-size: 14px; line-height: 1.6; margin: 0;">${kindCopy.footerHtml}</p>
             </td>
           </tr>
@@ -174,11 +245,16 @@ function buildReservationEmailHtml(input: ReservationEmailTemplateInput): string
 </html>`;
 }
 
+function buildReservationEmailAttachments(areaAttachment: MailAttachment | null): MailAttachment[] {
+  return areaAttachment ? [...buildLogoAttachments(), areaAttachment] : buildLogoAttachments();
+}
+
 export async function sendReservationConfirmationEmail(input: ConfirmationEmailInput): Promise<void> {
   const { env, transporter } = createTransporter();
   const copy = getReservationEmailCopy(input.language);
   const kindCopy = copy.confirmation;
   const confirmedBy = `${escapeHtml(input.confirmedByName)} (${escapeHtml(input.confirmedByEmail)})`;
+  const areaAttachment = buildAreaImageAttachment(input.areaImagePath);
   const html = buildReservationEmailHtml({
     copy,
     kindCopy,
@@ -188,14 +264,14 @@ export async function sendReservationConfirmationEmail(input: ConfirmationEmailI
     area: input.area,
     location: input.location,
     extraRows: detailRow(copy.labels.confirmedBy, confirmedBy, false),
-  });
+  }, areaAttachment);
 
   await transporter.sendMail({
     from: env.SMTP_FROM,
     to: input.to,
     subject: kindCopy.subject,
     html,
-    attachments: buildLogoAttachments(),
+    attachments: buildReservationEmailAttachments(areaAttachment),
   });
 }
 
@@ -204,6 +280,7 @@ export async function sendReservationRejectionEmail(input: RejectionEmailInput):
   const copy = getReservationEmailCopy(input.language);
   const kindCopy = copy.rejection;
   const reasonRow = input.reason ? detailRow(copy.labels.reason, escapeHtml(input.reason), false) : undefined;
+  const areaAttachment = buildAreaImageAttachment(input.areaImagePath);
   const html = buildReservationEmailHtml({
     copy,
     kindCopy,
@@ -213,14 +290,14 @@ export async function sendReservationRejectionEmail(input: RejectionEmailInput):
     area: input.area,
     location: input.location,
     extraRows: reasonRow,
-  });
+  }, areaAttachment);
 
   await transporter.sendMail({
     from: env.SMTP_FROM,
     to: input.to,
     subject: kindCopy.subject,
     html,
-    attachments: buildLogoAttachments(),
+    attachments: buildReservationEmailAttachments(areaAttachment),
   });
 }
 
@@ -228,6 +305,7 @@ export async function sendReservationCancellationEmail(input: CancellationEmailI
   const { env, transporter } = createTransporter();
   const copy = getReservationEmailCopy(input.language);
   const kindCopy = copy.cancellation;
+  const areaAttachment = buildAreaImageAttachment(input.areaImagePath);
   const html = buildReservationEmailHtml({
     copy,
     kindCopy,
@@ -236,13 +314,13 @@ export async function sendReservationCancellationEmail(input: CancellationEmailI
     reservationTime: input.reservationTime,
     area: input.area,
     location: input.location,
-  });
+  }, areaAttachment);
 
   await transporter.sendMail({
     from: env.SMTP_FROM,
     to: input.to,
     subject: kindCopy.subject,
     html,
-    attachments: buildLogoAttachments(),
+    attachments: buildReservationEmailAttachments(areaAttachment),
   });
 }
