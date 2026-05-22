@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   checkReservationRateLimit: vi.fn(),
   getClientIp: vi.fn(),
   validateImageFile: vi.fn(),
+  processZonePhoto: vi.fn(),
   saveZonePhoto: vi.fn(),
   deleteZonePhoto: vi.fn(),
   toAreaSlug: vi.fn(),
@@ -109,6 +110,7 @@ vi.mock("@/lib/auth/client-ip", () => ({
 
 vi.mock("@/lib/photos", () => ({
   validateImageFile: mocks.validateImageFile,
+  processZonePhoto: mocks.processZonePhoto,
   saveZonePhoto: mocks.saveZonePhoto,
   deleteZonePhoto: mocks.deleteZonePhoto,
   toAreaSlug: mocks.toAreaSlug,
@@ -1146,6 +1148,7 @@ describe("uploadZonePhotoAction", () => {
     mocks.recordAuditLog.mockResolvedValue(undefined);
     mocks.getUploadDir.mockReturnValue("public");
     mocks.toAreaSlug.mockImplementation((val: string) => val.toLowerCase().replace(/\s+/g, "-"));
+    mocks.processZonePhoto.mockResolvedValue({ buffer: Buffer.from([9, 8, 7]), ext: ".webp", mime: "image/webp" });
     mocks.saveZonePhoto.mockResolvedValue("/uploads/zones/tauras-default/terraza.jpg");
     mocks.locationFindUnique.mockResolvedValue({ id: "loc-1", slug: "tauras-default" });
     mocks.redirect.mockImplementation((url: string) => {
@@ -1164,8 +1167,9 @@ describe("uploadZonePhotoAction", () => {
     );
 
     expect(mocks.validateImageFile).toHaveBeenCalledOnce();
+    expect(mocks.processZonePhoto).toHaveBeenCalledWith(Buffer.from([1, 2, 3]));
     expect(mocks.saveZonePhoto).toHaveBeenCalledWith(
-      "public", "tauras-default", "terraza", expect.any(Buffer), ".jpg",
+      "public", "tauras-default", "terraza", Buffer.from([9, 8, 7]), ".webp",
     );
     expect(mocks.zoneUpsert).toHaveBeenCalledWith({
       where: { locationId_areaValue: { locationId: "loc-1", areaValue: "Terraza" } },
@@ -1201,6 +1205,19 @@ describe("uploadZonePhotoAction", () => {
 
     await expect(uploadZonePhotoAction(formData)).rejects.toThrow(
       "redirect:/admin/settings/photos?error=invalid-data",
+    );
+
+    expect(mocks.saveZonePhoto).not.toHaveBeenCalled();
+    expect(mocks.zoneUpsert).not.toHaveBeenCalled();
+  });
+
+  it("rejects upload when image processing fails", async () => {
+    mocks.validateImageFile.mockResolvedValue({ ok: true, buffer: Buffer.from([1, 2, 3]), ext: ".jpg", mime: "image/jpeg" });
+    mocks.processZonePhoto.mockRejectedValue(new Error("unsupported-photo"));
+
+    const { uploadZonePhotoAction } = await import("@/app/actions");
+    await expect(uploadZonePhotoAction(buildPhotoFormData())).rejects.toThrow(
+      "redirect:/admin/settings/photos?error=unsupported-photo",
     );
 
     expect(mocks.saveZonePhoto).not.toHaveBeenCalled();

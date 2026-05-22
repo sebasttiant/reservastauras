@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import sharp from "sharp";
 
 vi.mock("server-only", () => ({}));
 
@@ -71,7 +72,7 @@ describe("validateImageFile", () => {
     vi.clearAllMocks();
   });
 
-  it("accepts a valid JPEG under 2MB with correct magic bytes", async () => {
+  it("accepts a valid JPEG under 10MB with correct magic bytes", async () => {
     const { validateImageFile } = await import("@/lib/photos");
     const blob = new Blob([new Uint8Array([0xFF, 0xD8, 0xFF, 0x00])], { type: "image/jpeg" });
     const file = new File([blob], "photo.jpg", { type: "image/jpeg" });
@@ -99,7 +100,7 @@ describe("validateImageFile", () => {
     }
   });
 
-  it("accepts a valid PNG under 2MB", async () => {
+  it("accepts a valid PNG under 10MB", async () => {
     const { validateImageFile } = await import("@/lib/photos");
     const blob = new Blob([new Uint8Array([0x89, 0x50, 0x4E, 0x47])], { type: "image/png" });
     const file = new File([blob], "photo.png", { type: "image/png" });
@@ -113,7 +114,7 @@ describe("validateImageFile", () => {
     }
   });
 
-  it("accepts a valid WebP under 2MB", async () => {
+  it("accepts a valid WebP under 10MB", async () => {
     const { validateImageFile } = await import("@/lib/photos");
     const blob = new Blob([new Uint8Array([0x52, 0x49, 0x46, 0x46])], { type: "image/webp" });
     const file = new File([blob], "photo.webp", { type: "image/webp" });
@@ -127,11 +128,11 @@ describe("validateImageFile", () => {
     }
   });
 
-  it("rejects file over 2MB", async () => {
+  it("rejects file over 10MB", async () => {
     const { validateImageFile } = await import("@/lib/photos");
     const blob = new Blob([new Uint8Array([0xFF, 0xD8, 0xFF, 0x00])], { type: "image/jpeg" });
     const file = new File([blob], "large.jpg", { type: "image/jpeg" });
-    Object.defineProperty(file, "size", { value: 3 * 1024 * 1024 });
+    Object.defineProperty(file, "size", { value: 11 * 1024 * 1024 });
 
     const result = await validateImageFile(file);
     expect(result.ok).toBe(false);
@@ -251,5 +252,36 @@ describe("deleteZonePhoto", () => {
       "Invalid upload path",
     );
     expect(unlink).not.toHaveBeenCalled();
+  });
+});
+
+describe("processZonePhoto", () => {
+  it("normalizes a valid image into a 1600x1000 WebP", async () => {
+    const { processZonePhoto } = await import("@/lib/photos");
+    const input = await sharp({
+      create: {
+        width: 2400,
+        height: 1200,
+        channels: 3,
+        background: { r: 120, g: 60, b: 30 },
+      },
+    })
+      .jpeg()
+      .toBuffer();
+
+    const result = await processZonePhoto(input);
+    const metadata = await sharp(result.buffer).metadata();
+
+    expect(result.ext).toBe(".webp");
+    expect(result.mime).toBe("image/webp");
+    expect(metadata.format).toBe("webp");
+    expect(metadata.width).toBe(1600);
+    expect(metadata.height).toBe(1000);
+  });
+
+  it("rejects malformed image data instead of saving a corrupt file", async () => {
+    const { processZonePhoto } = await import("@/lib/photos");
+
+    await expect(processZonePhoto(Buffer.from([0xFF, 0xD8, 0xFF]))).rejects.toThrow("unsupported-photo");
   });
 });

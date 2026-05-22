@@ -30,6 +30,7 @@ import {
 } from "@/lib/reservations/location-config";
 import {
   validateImageFile,
+  processZonePhoto,
   saveZonePhoto,
   deleteZonePhoto,
   toAreaSlug,
@@ -661,6 +662,14 @@ export async function uploadZonePhotoAction(formData: FormData): Promise<void> {
   if (!areaSlug) {
     redirectWithError("/admin/settings/photos", "invalid-data");
   }
+
+  let processed: Awaited<ReturnType<typeof processZonePhoto>>;
+  try {
+    processed = await processZonePhoto(validation.buffer);
+  } catch {
+    redirectWithError("/admin/settings/photos", "unsupported-photo");
+  }
+
   const uploadDir = getUploadDir();
 
   const existingZone = await prisma.zone.findUnique({
@@ -672,7 +681,7 @@ export async function uploadZonePhotoAction(formData: FormData): Promise<void> {
     await deleteZonePhoto(uploadDir, existingZone.imagePath);
   }
 
-  const relativePath = await saveZonePhoto(uploadDir, location.slug, areaSlug, validation.buffer, validation.ext);
+  const relativePath = await saveZonePhoto(uploadDir, location.slug, areaSlug, processed.buffer, processed.ext);
 
   await prisma.zone.upsert({
     where: { locationId_areaValue: { locationId, areaValue } },
