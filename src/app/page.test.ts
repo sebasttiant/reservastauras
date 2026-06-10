@@ -63,6 +63,12 @@ describe("HomePage public language rendering", () => {
     expect(html).toContain("required");
     expect(html).toContain('href="/"');
     expect(html).toContain('href="/?lang=es"');
+    expect(html).toContain("Choose your language");
+    expect(html).toContain('src="/flags/us.svg"');
+    expect(html).toContain('src="/flags/es.svg"');
+    expect(html).toContain('alt=""');
+    expect(html).toContain('aria-hidden="true"');
+    expect(html).toContain('aria-current="true"');
     expect(html).not.toContain('name="lang"');
     expect(html).not.toContain('href="/?lang=en"');
   });
@@ -71,6 +77,7 @@ describe("HomePage public language rendering", () => {
     const html = await renderHomePage({ lang: "es" });
 
     expect(html).toContain("Reserva tu mesa con tranquilidad");
+    expect(html).toContain("Elige tu idioma");
     expect(html).toContain('href="/?lang=es"');
     expect(html).toContain('name="customerLanguage"');
     expect(html).toContain('value="es"');

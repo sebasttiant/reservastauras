@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Spain flag">
+  <defs>
+    <clipPath id="circle">
+      <circle cx="32" cy="32" r="32" />
+    </clipPath>
+  </defs>
+  <g clip-path="url(#circle)">
+    <path fill="#aa151b" d="M0 0h64v64H0z" />
+    <path fill="#f1bf00" d="M0 16h64v32H0z" />
+  </g>
+</svg>
