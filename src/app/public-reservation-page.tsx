@@ -123,10 +123,43 @@ export async function PublicReservationPage({ searchParams }: PublicReservationP
               <p className="muted">{copy.section.description}</p>
             </div>
 
-            <nav className="hero-highlights" aria-label={copy.language.ariaLabel}>
-              <a href={buildPublicLanguageHref("en")}>{copy.language.en}</a>
-              <a href={buildPublicLanguageHref("es")}>{copy.language.es}</a>
-            </nav>
+            <div className="language-switch">
+              <p className="language-switch-title">{copy.language.title}</p>
+              <nav className="language-options" aria-label={copy.language.ariaLabel}>
+                <a
+                  href={buildPublicLanguageHref("en")}
+                  className="language-option"
+                  hrefLang="en"
+                  aria-current={publicLanguage === "en" ? "true" : undefined}
+                >
+                  <img
+                    className="language-flag"
+                    src="/flags/us.svg"
+                    alt=""
+                    aria-hidden="true"
+                    width={22}
+                    height={22}
+                  />
+                  <span className="language-name">{copy.language.en}</span>
+                </a>
+                <a
+                  href={buildPublicLanguageHref("es")}
+                  className="language-option"
+                  hrefLang="es"
+                  aria-current={publicLanguage === "es" ? "true" : undefined}
+                >
+                  <img
+                    className="language-flag"
+                    src="/flags/es.svg"
+                    alt=""
+                    aria-hidden="true"
+                    width={22}
+                    height={22}
+                  />
+                  <span className="language-name">{copy.language.es}</span>
+                </a>
+              </nav>
+            </div>
 
             {successSummary ? (
               <>

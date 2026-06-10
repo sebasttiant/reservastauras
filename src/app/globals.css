@@ -101,6 +101,56 @@ h2 { color: var(--brand); font-size: clamp(1.45rem, 4vw, 2rem); line-height: 1.0
   font-weight: 900;
 }
 
+.language-switch {
+  display: grid;
+  gap: 10px;
+}
+
+.language-switch-title {
+  color: var(--muted);
+  font-size: .82rem;
+  font-weight: 800;
+  margin: 0;
+}
+
+.language-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.language-option {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .06);
+  color: var(--fg);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px 7px 8px;
+  font-size: .86rem;
+  font-weight: 900;
+  line-height: 1;
+  transition: border-color .18s ease, background .18s ease, color .18s ease, box-shadow .18s ease;
+}
+
+.language-option:hover,
+.language-option[aria-current="true"] {
+  border-color: var(--border-strong);
+  background: rgba(255, 193, 7, .12);
+  color: var(--brand);
+  box-shadow: 0 0 0 1px rgba(255, 193, 7, .12);
+}
+
+.language-flag {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px var(--border), 0 2px 8px rgba(0, 0, 0, .24);
+}
+
 .card {
   background: var(--card);
   border: 1px solid var(--border);

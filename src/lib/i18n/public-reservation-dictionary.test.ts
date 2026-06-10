@@ -49,6 +49,11 @@ describe("public reservation dictionary", () => {
     expect(getPublicReservationCopy("en").form.partySizeHelp).toContain("children and babies");
   });
 
+  it("includes localized language selector titles", () => {
+    expect(getPublicReservationCopy("es").language.title).toBe("Elige tu idioma");
+    expect(getPublicReservationCopy("en").language.title).toBe("Choose your language");
+  });
+
   it("localizes visible reason labels while keeping canonical option values", () => {
     const englishCopy = getPublicReservationCopy("en");
 

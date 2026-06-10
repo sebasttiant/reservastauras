@@ -50,6 +50,7 @@ interface PublicReservationFormCopy {
 
 interface PublicReservationLanguageCopy {
   ariaLabel: string;
+  title: string;
   es: string;
   en: string;
 }
@@ -213,6 +214,7 @@ export const PUBLIC_RESERVATION_COPY: Record<PublicLanguage, PublicReservationCo
     },
     language: {
       ariaLabel: "Idioma del formulario de reservas",
+      title: "Elige tu idioma",
       es: "Español",
       en: "English",
     },
@@ -305,6 +307,7 @@ export const PUBLIC_RESERVATION_COPY: Record<PublicLanguage, PublicReservationCo
     },
     language: {
       ariaLabel: "Reservation form language",
+      title: "Choose your language",
       es: "Español",
       en: "English",
     },
