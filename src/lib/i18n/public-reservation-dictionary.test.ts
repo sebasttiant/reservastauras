@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   PUBLIC_RESERVATION_COPY,
   buildPublicLanguageHref,
+  formatPublicLocationName,
   getPublicReservationCopy,
   getLocationAreaOptions,
 } from "@/lib/i18n/public-reservation-dictionary";
@@ -52,6 +53,21 @@ describe("public reservation dictionary", () => {
   it("includes localized language selector titles", () => {
     expect(getPublicReservationCopy("es").language.title).toBe("Elige tu idioma");
     expect(getPublicReservationCopy("en").language.title).toBe("Choose your language");
+  });
+
+  it("strips the Tauras prefix from public location names without renaming the rest", () => {
+    expect(formatPublicLocationName("TAURAS Steakhouse")).toBe("Steakhouse");
+    expect(formatPublicLocationName("Tauras Bar & Lounge")).toBe("Bar & Lounge");
+    expect(formatPublicLocationName("tauras Tex Mex")).toBe("Tex Mex");
+  });
+
+  it("leaves names without the Tauras prefix untouched", () => {
+    expect(formatPublicLocationName("Steakhouse")).toBe("Steakhouse");
+    expect(formatPublicLocationName("Taurasburger")).toBe("Taurasburger");
+  });
+
+  it("falls back to the original name when stripping leaves it empty", () => {
+    expect(formatPublicLocationName("Tauras ")).toBe("Tauras ");
   });
 
   it("localizes visible reason labels while keeping canonical option values", () => {

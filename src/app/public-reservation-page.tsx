@@ -6,6 +6,7 @@ import { ReservationSuccessReset } from "@/app/reservation-success-reset";
 import { SubmitButton } from "@/app/submit-button";
 import {
   buildPublicLanguageHref,
+  formatPublicLocationName,
   getPublicReservationCopy,
   getLocationAreaOptions,
   shouldRenderLanguageParam,
@@ -37,7 +38,7 @@ function toPublicLocations(
   return rows.map((row) => ({
     id: row.id,
     slug: row.slug,
-    name: row.name,
+    name: formatPublicLocationName(row.name),
     description: locationEntries[row.slug]
       ? `${locationEntries[row.slug].description} · ${locationEntries[row.slug].hours}`
       : row.reservationLabel,

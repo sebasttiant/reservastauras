@@ -358,3 +358,11 @@ export function isSupportedPublicLanguage(value: unknown): value is PublicLangua
 export function shouldRenderLanguageParam(language: PublicLanguage): boolean {
   return language !== DEFAULT_PUBLIC_LANGUAGE;
 }
+
+// Public-facing display only: strip the "Tauras" brand prefix from a location
+// name so the selector shows just the venue ("Steakhouse", "Bar & Lounge").
+// The stored name is untouched — emails and admin keep the full brand name.
+export function formatPublicLocationName(name: string): string {
+  const stripped = name.replace(/^tauras\s+/i, "").trim();
+  return stripped.length > 0 ? stripped : name;
+}

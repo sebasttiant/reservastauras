@@ -130,9 +130,11 @@ describe("HomePage public language rendering", () => {
   it("renders all 3 sedes when active locations are provided", async () => {
     const html = await renderHomePage();
 
-    expect(html).toContain("TAURAS Steakhouse");
-    expect(html).toContain("TAURAS Bar &amp; Lounge");
-    expect(html).toContain("TAURAS Tex Mex");
+    expect(html).toContain(">Steakhouse<");
+    expect(html).toContain("Bar &amp; Lounge");
+    expect(html).toContain("Tex Mex");
+    expect(html).not.toContain("TAURAS Steakhouse");
+    expect(html).not.toContain("TAURAS Bar &amp; Lounge");
     expect(html).toContain('value="tauras-default"');
     expect(html).toContain('value="tauras-bar-lounge"');
     expect(html).toContain('value="tauras-tex-mex"');
