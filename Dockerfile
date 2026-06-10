@@ -2,7 +2,10 @@ FROM node:24.15.0-trixie-slim AS base
 ARG NPM_VERSION=11.14.0
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN npm install -g "npm@${NPM_VERSION}" \
+RUN apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
+ && rm -rf /var/lib/apt/lists/* \
+ && npm install -g "npm@${NPM_VERSION}" \
  && corepack enable
 WORKDIR /app
 
