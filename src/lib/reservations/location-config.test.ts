@@ -6,6 +6,8 @@ import {
   isLocationAreaAllowed,
   isLocationOpenOnDate,
   isLocationTimeAllowed,
+  isPublicVenueAlias,
+  resolveVenueAliasToSlug,
 } from "@/lib/reservations/location-config";
 
 describe("reservation location config", () => {
@@ -54,5 +56,29 @@ describe("reservation location config", () => {
     expect(isLocationTimeAllowed(LOCATION_SLUGS.TEX_MEX, "17:00")).toBe(true);
     expect(isLocationTimeAllowed(LOCATION_SLUGS.TEX_MEX, "17:30")).toBe(false);
     expect(isLocationAreaAllowed(LOCATION_SLUGS.TEX_MEX, "Patio")).toBe(false);
+  });
+});
+
+describe("public venue aliases", () => {
+  it("maps each public alias to its internal location slug", () => {
+    expect(resolveVenueAliasToSlug("steakhouse")).toBe(LOCATION_SLUGS.STEAKHOUSE);
+    expect(resolveVenueAliasToSlug("bar-lounge")).toBe(LOCATION_SLUGS.BAR_LOUNGE);
+    expect(resolveVenueAliasToSlug("tex-mex")).toBe(LOCATION_SLUGS.TEX_MEX);
+  });
+
+  it("never exposes internal slugs as valid public aliases", () => {
+    // Marketing links must not accept the internal slug as the public contract.
+    expect(resolveVenueAliasToSlug("tauras-default")).toBeNull();
+    expect(isPublicVenueAlias("tauras-tex-mex")).toBe(false);
+  });
+
+  it("rejects unknown, empty, prototype, and non-string venue values", () => {
+    expect(resolveVenueAliasToSlug("foo")).toBeNull();
+    expect(resolveVenueAliasToSlug("")).toBeNull();
+    expect(resolveVenueAliasToSlug("constructor")).toBeNull();
+    expect(resolveVenueAliasToSlug(undefined)).toBeNull();
+    expect(resolveVenueAliasToSlug(42)).toBeNull();
+    expect(isPublicVenueAlias("steakhouse")).toBe(true);
+    expect(isPublicVenueAlias("bar")).toBe(false);
   });
 });

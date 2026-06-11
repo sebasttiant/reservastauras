@@ -15,7 +15,10 @@ import { parsePublicLanguage } from "@/lib/i18n/language";
 import {
   LOCATION_SLUGS,
   getLocationTimeOptions,
+  isPublicVenueAlias,
+  resolveVenueAliasToSlug,
 } from "@/lib/reservations/location-config";
+import { UTM_PARAMETERS, sanitizeUtmValue } from "@/lib/reservations/marketing";
 import type { PublicLanguage } from "@/lib/i18n/language";
 import { PUBLIC_ERROR_MESSAGES, lookupPublicMessage } from "@/lib/messages";
 import { getActiveReservationLocations, getZoneImages } from "@/lib/reservations/locations";
@@ -92,7 +95,20 @@ export async function PublicReservationPage({ searchParams }: PublicReservationP
 
   const areaOptionsByLocation = buildAreaOptionsByLocation(publicLanguage);
   const timeOptionsByLocation = buildTimeOptionsByLocation();
-  const defaultLocationSlug = publicLocations.length > 0 ? publicLocations[0].slug : "tauras-default";
+
+  // Marketing entry: resolve the public `venue` alias to an internal slug.
+  // Only honoured when it maps to an actually active location; otherwise we
+  // fall back to the current behaviour (invalid/absent venue is ignored).
+  const landingVenue = isPublicVenueAlias(searchParams.venue) ? searchParams.venue : null;
+  const requestedVenueSlug = resolveVenueAliasToSlug(searchParams.venue);
+  const activeSlugs = new Set(publicLocations.map((location) => location.slug));
+  const preselectedVenueSlug =
+    requestedVenueSlug && activeSlugs.has(requestedVenueSlug) ? requestedVenueSlug : null;
+
+  const firstLocationSlug = publicLocations.length > 0 ? publicLocations[0].slug : "tauras-default";
+  // Drives the SSR area/time options. A preselected venue must render its own
+  // areas; without one we keep showing the first location, as before.
+  const defaultLocationSlug = preselectedVenueSlug ?? firstLocationSlug;
   const minimumReservationDate = getBusinessTodayDateString();
 
   const zoneImagesByLocation: Record<string, Record<string, string | null>> = {};
@@ -128,7 +144,7 @@ export async function PublicReservationPage({ searchParams }: PublicReservationP
               <p className="language-switch-title">{copy.language.title}</p>
               <nav className="language-options" aria-label={copy.language.ariaLabel}>
                 <a
-                  href={buildPublicLanguageHref("en")}
+                  href={buildPublicLanguageHref("en", landingVenue, searchParams)}
                   className="language-option"
                   hrefLang="en"
                   aria-current={publicLanguage === "en" ? "true" : undefined}
@@ -144,7 +160,7 @@ export async function PublicReservationPage({ searchParams }: PublicReservationP
                   <span className="language-name">{copy.language.en}</span>
                 </a>
                 <a
-                  href={buildPublicLanguageHref("es")}
+                  href={buildPublicLanguageHref("es", landingVenue, searchParams)}
                   className="language-option"
                   hrefLang="es"
                   aria-current={publicLanguage === "es" ? "true" : undefined}
@@ -214,10 +230,19 @@ export async function PublicReservationPage({ searchParams }: PublicReservationP
               <form action={createReservationAction} className="grid">
               <input type="hidden" name="customerLanguage" value={publicLanguage} />
               {shouldRenderLanguageParam(publicLanguage) ? <input type="hidden" name="lang" value={publicLanguage} /> : null}
+              {/* Marketing attribution: persisted on the reservation. Only
+                  emitted when present and sanitized, so reservations without a
+                  tracking link post nothing extra. */}
+              {landingVenue ? <input type="hidden" name="landingVenue" value={landingVenue} /> : null}
+              {UTM_PARAMETERS.map(({ param, field }) => {
+                const value = sanitizeUtmValue(searchParams[param]);
+                return value ? <input key={field} type="hidden" name={field} value={value} /> : null;
+              })}
               <LocationSelector
                 copy={copy.locations}
                 locations={publicLocations}
                 isDemo={false}
+                selectedSlug={preselectedVenueSlug ?? undefined}
               />
               <div className="grid two">
                 <ReservationDynamicFields

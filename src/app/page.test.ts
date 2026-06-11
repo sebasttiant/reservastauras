@@ -140,3 +140,100 @@ describe("HomePage public language rendering", () => {
     expect(html).toContain('value="tauras-tex-mex"');
   });
 });
+
+describe("HomePage marketing venue + UTM links", () => {
+  // Helper: locate the radio input for a given internal slug and assert whether
+  // it is rendered as checked. renderToStaticMarkup emits `checked=""`.
+  function radioIsChecked(html: string, slug: string): boolean {
+    const marker = `value="${slug}"`;
+    const idx = html.indexOf(marker);
+    if (idx === -1) return false;
+    // The `checked` attribute (when present) precedes value within the same input tag.
+    const tagStart = html.lastIndexOf("<input", idx);
+    const tag = html.slice(tagStart, idx + marker.length);
+    return tag.includes("checked");
+  }
+
+  it("preselects Tex Mex and renders English from ?venue=tex-mex&lang=en", async () => {
+    const html = await renderHomePage({ venue: "tex-mex", lang: "en" });
+
+    expect(html).toContain("Book your table with confidence");
+    expect(radioIsChecked(html, "tauras-tex-mex")).toBe(true);
+    expect(radioIsChecked(html, "tauras-default")).toBe(false);
+    // Tex Mex areas drive the SSR options (Dining Room is Tex-Mex-only in English).
+    expect(html).toContain("Dining Room");
+  });
+
+  it("preselects Bar & Lounge and renders Spanish from ?venue=bar-lounge&lang=es", async () => {
+    const html = await renderHomePage({ venue: "bar-lounge", lang: "es" });
+
+    expect(html).toContain("Reserva tu mesa con tranquilidad");
+    expect(radioIsChecked(html, "tauras-bar-lounge")).toBe(true);
+  });
+
+  it("preserves the venue in the language-switch hrefs", async () => {
+    const html = await renderHomePage({ venue: "tex-mex", lang: "es" });
+
+    expect(html).toContain('href="/?lang=es&amp;venue=tex-mex"');
+    expect(html).toContain('href="/?venue=tex-mex"');
+  });
+
+  it("preserves venue + UTM in the language-switch hrefs, dropping arbitrary params", async () => {
+    const html = await renderHomePage({
+      venue: "tex-mex",
+      lang: "en",
+      utm_source: "google",
+      utm_medium: "cpc",
+      utm_campaign: "texmex_en",
+      foo: "bar",
+    });
+
+    // EN link (current language) omits lang but carries venue + UTM.
+    expect(html).toContain(
+      'href="/?venue=tex-mex&amp;utm_source=google&amp;utm_medium=cpc&amp;utm_campaign=texmex_en"',
+    );
+    // ES link carries lang + venue + UTM so attribution survives a switch.
+    expect(html).toContain(
+      'href="/?lang=es&amp;venue=tex-mex&amp;utm_source=google&amp;utm_medium=cpc&amp;utm_campaign=texmex_en"',
+    );
+    // Arbitrary / lifecycle params are never carried into the language hrefs.
+    expect(html).not.toContain("foo=bar");
+  });
+
+  it("does not preserve UTM when the values are empty or absent", async () => {
+    const html = await renderHomePage({ venue: "tex-mex", lang: "es", utm_source: "   " });
+
+    // Blank UTM is dropped: the href stays venue-only.
+    expect(html).toContain('href="/?lang=es&amp;venue=tex-mex"');
+    expect(html).not.toContain("utm_source");
+  });
+
+  it("emits sanitized hidden inputs for landingVenue and UTM params", async () => {
+    const html = await renderHomePage({
+      venue: "tex-mex",
+      utm_source: "google",
+      utm_medium: "cpc",
+      utm_campaign: "texmex_es",
+    });
+
+    expect(html).toContain('name="landingVenue"');
+    expect(html).toContain('value="tex-mex"');
+    expect(html).toContain('name="utmSource"');
+    expect(html).toContain('value="google"');
+    expect(html).toContain('name="utmCampaign"');
+    expect(html).toContain('value="texmex_es"');
+    // No UTM term/content were provided, so those hidden inputs are absent.
+    expect(html).not.toContain('name="utmTerm"');
+    expect(html).not.toContain('name="utmContent"');
+  });
+
+  it("ignores an invalid venue without breaking the page or preselecting", async () => {
+    const html = await renderHomePage({ venue: "foo", lang: "es" });
+
+    expect(html).toContain("Reserva tu mesa con tranquilidad");
+    expect(html).not.toContain('name="landingVenue"');
+    expect(html).not.toContain('href="/?lang=es&amp;venue=');
+    expect(radioIsChecked(html, "tauras-default")).toBe(false);
+    expect(radioIsChecked(html, "tauras-tex-mex")).toBe(false);
+  });
+});

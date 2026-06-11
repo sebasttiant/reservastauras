@@ -105,6 +105,17 @@ model Reservation {
   cancelledBy     Admin?            @relation("ReservationCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
   cancellationReason String?
   emailError      String?
+  // Marketing attribution for reservations created from Google Ads or external
+  // landing pages. `landingVenue` holds the public venue alias the visitor
+  // entered through (steakhouse | bar-lounge | tex-mex); it may differ from the
+  // finally booked `locationId` if the visitor switched venue. All nullable:
+  // admin/manual reservations and links without tracking leave them empty.
+  landingVenue    String?
+  utmSource       String?
+  utmMedium       String?
+  utmCampaign     String?
+  utmContent      String?
+  utmTerm         String?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
@@ -115,6 +126,8 @@ model Reservation {
   @@index([createdByAdminId])
   @@index([rejectedById])
   @@index([cancelledById])
+  @@index([landingVenue])
+  @@index([utmCampaign])
 }
 
 model LoginAttempt {

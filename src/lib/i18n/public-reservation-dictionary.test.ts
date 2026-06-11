@@ -98,6 +98,66 @@ describe("public reservation dictionary", () => {
     expect(buildPublicLanguageHref("foo")).toBe("/");
   });
 
+  it("preserves the venue alias when switching language from a marketing link", () => {
+    expect(buildPublicLanguageHref("en", "tex-mex")).toBe("/?venue=tex-mex");
+    expect(buildPublicLanguageHref("es", "tex-mex")).toBe("/?lang=es&venue=tex-mex");
+    // A null/absent venue keeps the clean default hrefs.
+    expect(buildPublicLanguageHref("en", null)).toBe("/");
+    expect(buildPublicLanguageHref("es", undefined)).toBe("/?lang=es");
+  });
+
+  it("preserves venue + sanitized UTM when switching to Spanish", () => {
+    const href = buildPublicLanguageHref("es", "tex-mex", {
+      utm_source: "google",
+      utm_medium: "cpc",
+      utm_campaign: "texmex_en",
+      utm_content: "banner-a",
+      utm_term: "reservar mesa",
+    });
+    expect(href).toBe(
+      "/?lang=es&venue=tex-mex&utm_source=google&utm_medium=cpc&utm_campaign=texmex_en&utm_content=banner-a&utm_term=reservar+mesa",
+    );
+  });
+
+  it("preserves venue + UTM when switching to English and omits lang=en", () => {
+    const href = buildPublicLanguageHref("en", "tex-mex", {
+      utm_source: "google",
+      utm_medium: "cpc",
+      utm_campaign: "texmex_en",
+    });
+    expect(href).toBe("/?venue=tex-mex&utm_source=google&utm_medium=cpc&utm_campaign=texmex_en");
+    expect(href).not.toContain("lang=en");
+  });
+
+  it("ignores empty, oversized, and non-allowlisted query params", () => {
+    const href = buildPublicLanguageHref("es", "tex-mex", {
+      utm_source: "google",
+      utm_medium: "   ",
+      utm_campaign: "",
+      utm_term: "x".repeat(500),
+      // Non-allowlisted / lifecycle params must never be carried over.
+      foo: "bar",
+      error: "invalid-data",
+      created: "1",
+      l: "tauras-default",
+    });
+    // Only utm_source survives intact; utm_term is truncated to 200 chars.
+    expect(href).toContain("utm_source=google");
+    expect(href).not.toContain("utm_medium");
+    expect(href).not.toContain("utm_campaign");
+    expect(href).not.toContain("foo=bar");
+    expect(href).not.toContain("error=");
+    expect(href).not.toContain("created=");
+    expect(href).not.toContain("&l=");
+    const term = new URL(`https://x${href.slice(1)}`).searchParams.get("utm_term");
+    expect(term).toHaveLength(200);
+  });
+
+  it("returns clean default hrefs when no venue and no UTM are present", () => {
+    expect(buildPublicLanguageHref("en", null, {})).toBe("/");
+    expect(buildPublicLanguageHref("es", null, { foo: "bar" })).toBe("/?lang=es");
+  });
+
   describe("per‑location area options", () => {
     it("provides Steakhouse areas with correct values in Spanish", () => {
       const options = getLocationAreaOptions(LOCATION_SLUGS.STEAKHOUSE, "es");
