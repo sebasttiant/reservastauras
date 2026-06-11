@@ -154,6 +154,15 @@ export async function createReservationAction(formData: FormData): Promise<void>
       // Esto desacopla el query (que puede venir corrupto) del valor que usaremos
       // luego para mandar emails al cliente.
       customerLanguage: input.customerLanguage,
+      // Atribución de marketing del link original. `landingVenue` guarda el alias
+      // público de entrada (puede diferir de la sede finalmente reservada si el
+      // usuario cambió de sede). Todo opcional: null cuando el link no traía UTM.
+      landingVenue: input.landingVenue ?? null,
+      utmSource: input.utmSource ?? null,
+      utmMedium: input.utmMedium ?? null,
+      utmCampaign: input.utmCampaign ?? null,
+      utmContent: input.utmContent ?? null,
+      utmTerm: input.utmTerm ?? null,
     },
   });
 

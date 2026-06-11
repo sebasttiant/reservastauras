@@ -901,6 +901,59 @@ describe("createReservationAction (persistencia bilingüe + redirects saneados)"
     expect(createArgs.data.area).toBe("Patio");
   });
 
+  it("persiste landingVenue y los UTM del link de marketing en la reserva", async () => {
+    const formData = buildFormData({
+      landingVenue: "tex-mex",
+      utmSource: "google",
+      utmMedium: "cpc",
+      utmCampaign: "texmex_es",
+      utmContent: "banner-a",
+      utmTerm: "reservar mesa",
+    });
+    const { createReservationAction } = await import("@/app/actions");
+
+    await expect(createReservationAction(formData)).rejects.toThrow("redirect:/?created=1");
+
+    const createArgs = mocks.reservationCreate.mock.calls[0]?.[0] as { data: Record<string, unknown> };
+    expect(createArgs.data.landingVenue).toBe("tex-mex");
+    expect(createArgs.data.utmSource).toBe("google");
+    expect(createArgs.data.utmMedium).toBe("cpc");
+    expect(createArgs.data.utmCampaign).toBe("texmex_es");
+    expect(createArgs.data.utmContent).toBe("banner-a");
+    expect(createArgs.data.utmTerm).toBe("reservar mesa");
+  });
+
+  it("preserva la sede realmente seleccionada aunque el landingVenue de entrada difiera", async () => {
+    // Entra por tex-mex pero reserva en bar-lounge: la reserva guarda la sede
+    // final, y landingVenue conserva el alias de marketing de entrada.
+    const formData = buildFormData({
+      locationSlug: "tauras-bar-lounge",
+      // Bar & Lounge is single-zone: its only valid area is its own name.
+      area: "Tauras Bar & Lounge",
+      landingVenue: "tex-mex",
+    });
+    mocks.locationFindFirst.mockResolvedValueOnce({ id: "location-bar-lounge" });
+    const { createReservationAction } = await import("@/app/actions");
+
+    await expect(createReservationAction(formData)).rejects.toThrow(/redirect:/);
+
+    const createArgs = mocks.reservationCreate.mock.calls[0]?.[0] as { data: Record<string, unknown> };
+    expect(createArgs.data.locationId).toBe("location-bar-lounge");
+    expect(createArgs.data.landingVenue).toBe("tex-mex");
+  });
+
+  it("crea la reserva sin marketing y deja los campos de tracking en null", async () => {
+    const formData = buildFormData();
+    const { createReservationAction } = await import("@/app/actions");
+
+    await expect(createReservationAction(formData)).rejects.toThrow("redirect:/?created=1");
+
+    const createArgs = mocks.reservationCreate.mock.calls[0]?.[0] as { data: Record<string, unknown> };
+    expect(createArgs.data.landingVenue).toBeNull();
+    expect(createArgs.data.utmSource).toBeNull();
+    expect(createArgs.data.utmCampaign).toBeNull();
+  });
+
   it("acepta el formulario actual sin customerLanguage y persiste 'en' por default", async () => {
     // Caso de compatibilidad: la persistencia se deploya antes que la UI bilingüe.
     // El formulario actual NO envía `customerLanguage`; ese request debe seguir

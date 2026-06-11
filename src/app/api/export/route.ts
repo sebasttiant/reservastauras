@@ -118,6 +118,16 @@ export async function GET(request: Request) {
     "Confirmado por": r.confirmedBy ? `${r.confirmedBy.name} <${r.confirmedBy.email}>` : "",
     "Error email": r.emailError ?? "",
     Notas: r.notes ?? "",
+    // Atribución de marketing del link original. Se exponen en el export para
+    // que marketing pueda analizar campañas sin entrar a la DB. El PDF usa
+    // claves explícitas, así que estas columnas aparecen en JSON/XLSX (que se
+    // alimentan del mismo `data`) sin romper el layout del PDF.
+    "Landing Venue": r.landingVenue ?? "",
+    "UTM Source": r.utmSource ?? "",
+    "UTM Medium": r.utmMedium ?? "",
+    "UTM Campaign": r.utmCampaign ?? "",
+    "UTM Content": r.utmContent ?? "",
+    "UTM Term": r.utmTerm ?? "",
   }));
 
   await recordAuditLog({
@@ -427,6 +437,19 @@ export async function GET(request: Request) {
       const notesLines = wrapText(row.Notas || "-", 95);
       const emailErrorLines = row["Error email"] ? wrapText(row["Error email"], 95) : [];
 
+      // Atribución de marketing: sección compacta de una línea wrappeada con
+      // solo los campos presentes. Si ninguno tiene valor, la sección no se
+      // dibuja (opción más limpia para el layout: no agrega ruido vacío).
+      const marketingParts = [
+        row["Landing Venue"] ? `Landing: ${row["Landing Venue"]}` : null,
+        row["UTM Source"] ? `Source: ${row["UTM Source"]}` : null,
+        row["UTM Medium"] ? `Medium: ${row["UTM Medium"]}` : null,
+        row["UTM Campaign"] ? `Campaign: ${row["UTM Campaign"]}` : null,
+        row["UTM Content"] ? `Content: ${row["UTM Content"]}` : null,
+        row["UTM Term"] ? `Term: ${row["UTM Term"]}` : null,
+      ].filter(Boolean) as string[];
+      const marketingLines = marketingParts.length > 0 ? wrapText(marketingParts.join("  ·  "), 95) : [];
+
       const headerH = 28;
       const pairsH =
         rowSpace(Math.max(linesCliente, linesEmail)) +
@@ -438,9 +461,10 @@ export async function GET(request: Request) {
       const confirmedH = rowSpace(linesConfirmado);
       const movementsH = rowSpace(linesMov);
       const notesH = labelH + notesLines.length * lineH;
+      const marketingH = marketingLines.length > 0 ? 6 + labelH + marketingLines.length * lineH : 0;
       const errorH = emailErrorLines.length > 0 ? 6 + labelH + emailErrorLines.length * lineH : 0;
       const bottomPad = 14;
-      const dynamicHeight = headerH + pairsH + confirmedH + movementsH + notesH + errorH + bottomPad;
+      const dynamicHeight = headerH + pairsH + confirmedH + movementsH + notesH + marketingH + errorH + bottomPad;
 
       ensureSpace(dynamicHeight);
 
@@ -527,6 +551,22 @@ export async function GET(request: Request) {
       for (const line of notesLines) {
         page.drawText(line, { x: leftX, y: fieldY, size: 9, font: helvetica, color: grayColor });
         fieldY -= lineH;
+      }
+
+      if (marketingLines.length > 0) {
+        fieldY -= 6;
+        page.drawText("ATRIBUCIÓN DE MARKETING", {
+          x: leftX,
+          y: fieldY,
+          size: 7,
+          font: helveticaBold,
+          color: rgb(0.45, 0.45, 0.45),
+        });
+        fieldY -= labelH;
+        for (const line of marketingLines) {
+          page.drawText(line, { x: leftX, y: fieldY, size: 9, font: helvetica, color: grayColor });
+          fieldY -= lineH;
+        }
       }
 
       if (emailErrorLines.length > 0) {

@@ -2,6 +2,28 @@ import { z } from "zod";
 import { ADMIN_ROLE, RESERVATION_SOURCE_VALUES, RESERVATION_STATUS } from "@/lib/constants";
 import { DEFAULT_PUBLIC_LANGUAGE, publicLanguageSchema } from "@/lib/i18n/language";
 import { isTodayOrLaterInBusinessZone } from "@/lib/reservations/business-date";
+import { isPublicVenueAlias } from "@/lib/reservations/location-config";
+import { sanitizeUtmValue } from "@/lib/reservations/marketing";
+
+// Marketing attribution fields are best-effort: they NEVER fail the form.
+// An oversized value is NOT rejected — it is trimmed and truncated to 200 chars
+// (via `sanitizeUtmValue`); a blank/missing value normalizes to `undefined`
+// (persisted as null). A corrupt or too-long tracking param can never block a
+// real reservation. We deliberately do not use `.max(200)`, which would fail
+// the whole form when a UTM value exceeds the bound.
+const trackingFieldSchema = z
+  .string()
+  .optional()
+  .transform((value) => sanitizeUtmValue(value) ?? undefined);
+
+// `landingVenue` stores the public alias the visitor arrived with
+// (`steakhouse`, `bar-lounge`, `tex-mex`). Anything outside the allowlist is
+// dropped silently — we record marketing entry intent, never raw client input.
+const landingVenueSchema = z
+  .string()
+  .trim()
+  .optional()
+  .transform((value) => (isPublicVenueAlias(value) ? value : undefined));
 
 const dateOnlySchema = z
   .string()
@@ -50,6 +72,15 @@ export const reservationRequestSchema = z.object({
   // “corregir” idiomas inválidos en silencio. El mensaje de Zod queda interno:
   // el cliente recibe la key opaca `invalid-data` desde la action, no este texto.
   customerLanguage: publicLanguageSchema.default(DEFAULT_PUBLIC_LANGUAGE),
+  // Marketing attribution (optional, best-effort). Persisted on the reservation
+  // so we can compare the venue the visitor entered through (`landingVenue`)
+  // against the location they finally booked (`locationSlug`).
+  landingVenue: landingVenueSchema,
+  utmSource: trackingFieldSchema,
+  utmMedium: trackingFieldSchema,
+  utmCampaign: trackingFieldSchema,
+  utmContent: trackingFieldSchema,
+  utmTerm: trackingFieldSchema,
 });
 
 export const loginSchema = z.object({

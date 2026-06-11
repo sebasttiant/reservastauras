@@ -6,6 +6,32 @@ export const LOCATION_SLUGS = {
   TEX_MEX: "tauras-tex-mex",
 } as const;
 
+// Public marketing aliases for venues. These are the ONLY venue identifiers
+// exposed in external links (Google Ads, landing pages). They intentionally
+// hide the internal location slugs so marketing URLs stay decoupled from the
+// data model and cannot be used to probe internal naming.
+export const PUBLIC_VENUE_ALIASES = {
+  steakhouse: LOCATION_SLUGS.STEAKHOUSE,
+  "bar-lounge": LOCATION_SLUGS.BAR_LOUNGE,
+  "tex-mex": LOCATION_SLUGS.TEX_MEX,
+} as const;
+
+export type PublicVenueAlias = keyof typeof PUBLIC_VENUE_ALIASES;
+
+// The query string is a client-controlled channel: validate `venue` against
+// the allowlist before trusting it. `Object.hasOwn` guards against prototype
+// keys (e.g. "constructor") sneaking through.
+export function isPublicVenueAlias(value: unknown): value is PublicVenueAlias {
+  return typeof value === "string" && Object.hasOwn(PUBLIC_VENUE_ALIASES, value);
+}
+
+// Resolves a public venue alias (`steakhouse`, `bar-lounge`, `tex-mex`) to its
+// internal location slug. Returns null for any value outside the allowlist so
+// callers can fall back to the default behaviour instead of trusting input.
+export function resolveVenueAliasToSlug(value: unknown): string | null {
+  return isPublicVenueAlias(value) ? PUBLIC_VENUE_ALIASES[value] : null;
+}
+
 const STEAKHOUSE_TIMES = [
   "11:00", "11:30", "12:00", "12:30", "13:00", "13:30",
   "14:00", "14:30", "15:00", "15:30", "16:00", "16:30",

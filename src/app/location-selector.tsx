@@ -25,12 +25,17 @@ interface LocationSelectorProps {
   copy: LocationSelectorCopy;
   locations: readonly PublicLocation[];
   isDemo?: boolean;
+  // Internal slug to preselect visually (e.g. arriving from a marketing link
+  // with a valid `venue`). When undefined, no card is checked by default and
+  // the visitor must pick one — the existing behaviour.
+  selectedSlug?: string;
 }
 
 export function LocationSelector({
   copy,
   locations,
   isDemo = false,
+  selectedSlug,
 }: LocationSelectorProps): ReactNode {
   return (
     <section className="location-selector" aria-label={copy.ariaLabel}>
@@ -47,6 +52,7 @@ export function LocationSelector({
               name="locationSlug"
               value={location.slug}
               required
+              defaultChecked={location.slug === selectedSlug}
               className="location-card-input"
               aria-label={location.name}
             />

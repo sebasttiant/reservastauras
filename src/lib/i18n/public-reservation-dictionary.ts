@@ -1,5 +1,6 @@
 import { DEFAULT_PUBLIC_LANGUAGE, PUBLIC_LANGUAGES, parsePublicLanguage } from "@/lib/i18n/language";
 import { DEFAULT_LOCATION_SLUG, LOCATION_AREA_VALUES, LOCATION_SLUGS } from "@/lib/reservations/location-config";
+import { UTM_PARAMETERS, sanitizeUtmValue } from "@/lib/reservations/marketing";
 import type { PublicLanguage } from "@/lib/i18n/language";
 
 interface PublicOptionCopy {
@@ -346,9 +347,38 @@ export function getPublicReservationCopy(language: unknown): PublicReservationCo
   return PUBLIC_RESERVATION_COPY[parsePublicLanguage(language)];
 }
 
-export function buildPublicLanguageHref(language: unknown): string {
+// Builds the language-switch href. Preserves the `venue` alias AND the
+// marketing UTM params (when present) so changing language from a Google Ads
+// link does NOT drop attribution before the visitor submits. `lang=en` is
+// omitted because English is the implicit default.
+//
+// UTM handling mirrors the hidden inputs: only the allowlisted UTM_PARAMETERS
+// are carried, each sanitized via `sanitizeUtmValue` (trim + 200-char bound +
+// blank dropped). Any other query key (error, created, n, d, t, p, l, a, or
+// arbitrary params) is ignored — we only read keys we explicitly allow.
+export function buildPublicLanguageHref(
+  language: unknown,
+  venue?: string | null,
+  utm?: Readonly<Record<string, string | null | undefined>>,
+): string {
   const publicLanguage = parsePublicLanguage(language);
-  return publicLanguage === DEFAULT_PUBLIC_LANGUAGE ? "/" : `/?lang=${publicLanguage}`;
+  const params = new URLSearchParams();
+  if (publicLanguage !== DEFAULT_PUBLIC_LANGUAGE) {
+    params.set("lang", publicLanguage);
+  }
+  if (venue) {
+    params.set("venue", venue);
+  }
+  if (utm) {
+    for (const { param } of UTM_PARAMETERS) {
+      const value = sanitizeUtmValue(utm[param]);
+      if (value) {
+        params.set(param, value);
+      }
+    }
+  }
+  const qs = params.toString();
+  return qs ? `/?${qs}` : "/";
 }
 
 export function isSupportedPublicLanguage(value: unknown): value is PublicLanguage {

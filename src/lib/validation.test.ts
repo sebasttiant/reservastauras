@@ -171,6 +171,81 @@ describe("reservationRequestSchema (con reloj fijado a Bogotá borde-de-día)", 
       expect(result.data.locationSlug).toBe("tauras-default");
     }
   });
+
+  it("persiste landingVenue y UTM saneados cuando vienen en el form", () => {
+    const result = reservationRequestSchema.safeParse({
+      ...baseInput,
+      reservationDate: FAR_FUTURE,
+      landingVenue: "tex-mex",
+      utmSource: "google",
+      utmMedium: "cpc",
+      utmCampaign: "texmex_es",
+      utmContent: "  banner-a  ",
+      utmTerm: "reservar mesa",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.landingVenue).toBe("tex-mex");
+      expect(result.data.utmSource).toBe("google");
+      expect(result.data.utmCampaign).toBe("texmex_es");
+      // Los valores se recortan (trim) antes de persistir.
+      expect(result.data.utmContent).toBe("banner-a");
+    }
+  });
+
+  it("no rompe la reserva cuando un UTM supera 200 caracteres: lo recorta a 200", () => {
+    // Best-effort real: un utm_campaign larguísimo llegado directo al server NO
+    // debe invalidar el formulario entero. Se recorta a 200, no se rechaza.
+    const longCampaign = "x".repeat(500);
+    const result = reservationRequestSchema.safeParse({
+      ...baseInput,
+      reservationDate: FAR_FUTURE,
+      utmCampaign: longCampaign,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.utmCampaign).toHaveLength(200);
+      // El resto de la reserva queda intacto.
+      expect(result.data.email).toBe("ada@example.com");
+      expect(result.data.partySize).toBe(4);
+    }
+  });
+
+  it("deja un UTM vacío o de solo espacios en undefined", () => {
+    const result = reservationRequestSchema.safeParse({
+      ...baseInput,
+      reservationDate: FAR_FUTURE,
+      utmSource: "",
+      utmCampaign: "   ",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.utmSource).toBeUndefined();
+      expect(result.data.utmCampaign).toBeUndefined();
+    }
+  });
+
+  it("descarta un landingVenue fuera del allowlist sin romper la reserva", () => {
+    const result = reservationRequestSchema.safeParse({
+      ...baseInput,
+      reservationDate: FAR_FUTURE,
+      landingVenue: "tauras-default",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.landingVenue).toBeUndefined();
+    }
+  });
+
+  it("acepta una reserva sin marketing y deja los campos en undefined", () => {
+    const result = reservationRequestSchema.safeParse({ ...baseInput, reservationDate: FAR_FUTURE });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.landingVenue).toBeUndefined();
+      expect(result.data.utmSource).toBeUndefined();
+      expect(result.data.utmTerm).toBeUndefined();
+    }
+  });
 });
 
 describe("loginSchema", () => {
