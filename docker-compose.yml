@@ -68,7 +68,9 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "3000:3000"
+      # Host 3330 -> contenedor 3000. Next.js sigue escuchando en 3000 adentro;
+      # solo cambia el puerto por el que se accede desde el servidor.
+      - "${WEB_PORT:-3330}:3000"
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
