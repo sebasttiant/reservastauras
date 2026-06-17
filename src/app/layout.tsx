@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://reservas.tauras.com.co"),
   title: {
     default: "Reservas Tauras | Reserva tu mesa",
     template: "%s | Reservas Tauras",
