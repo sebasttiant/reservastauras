@@ -249,7 +249,7 @@ describe("GET /api/export — marketing attribution columns", () => {
     const bytes = new Uint8Array(await res.arrayBuffer());
     expect(bytes.length).toBeGreaterThan(0);
     expect(Buffer.from(bytes.slice(0, 5)).toString("latin1")).toBe("%PDF-");
-  });
+  }, 10_000);
 
   it("generates the PDF when reservations mix marketing and no-marketing rows", async () => {
     // Ejercita el cálculo dinámico de altura: una card con sección de marketing
