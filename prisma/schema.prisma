@@ -16,6 +16,7 @@ enum ReservationStatus {
 enum AdminRole {
   SUPER_ADMIN
   ADMIN
+  RESERVATION_OPERATOR
 }
 
 model Admin {

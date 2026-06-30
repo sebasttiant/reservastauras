@@ -32,7 +32,7 @@
     "exceljs": "^4.4.0",
     "jose": "6.2.3",
     "next": "16.2.6",
-    "nodemailer": "8.0.7",
+    "nodemailer": "9.0.3",
     "pdf-lib": "^1.17.1",
     "pg": "8.21.0",
     "prisma": "7.8.0",
@@ -53,7 +53,7 @@
     "eslint-config-next": "16.2.6",
     "tsx": "4.22.3",
     "typescript": "5.9.3",
-    "vitest": "4.1.6"
+    "vitest": "4.1.9"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

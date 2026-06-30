@@ -92,7 +92,7 @@ export const createAdminSchema = z.object({
   name: z.string().trim().min(2, { error: "Ingresá el nombre del admin." }).max(120),
   email: z.email({ error: "Email inválido." }).transform((value) => value.toLowerCase()),
   password: z.string().min(10, { error: "La contraseña debe tener al menos 10 caracteres." }),
-  role: z.enum([ADMIN_ROLE.SUPER_ADMIN, ADMIN_ROLE.ADMIN], { error: "Rol inválido." }),
+  role: z.enum([ADMIN_ROLE.SUPER_ADMIN, ADMIN_ROLE.ADMIN, ADMIN_ROLE.RESERVATION_OPERATOR], { error: "Rol inválido." }),
 });
 
 export const manualReservationSchema = z.object({

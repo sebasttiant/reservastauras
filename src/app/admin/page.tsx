@@ -2,9 +2,10 @@ import Link from "next/link";
 import type { Route } from "next";
 import { Prisma, type ReservationStatus } from "@prisma/client";
 import { logoutAction } from "@/app/actions";
-import { ADMIN_ROLE, RESERVATION_STATUS } from "@/lib/constants";
+import { RESERVATION_STATUS } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
+import { canManageAdministration, canManageUsers } from "@/lib/permissions";
 import { ADMIN_ERROR_MESSAGES, lookupMessage } from "@/lib/messages";
 import { getBusinessTodayDateString } from "@/lib/reservations/business-date";
 import { AdminReservationFilters } from "./_components/admin-reservation-filters";
@@ -99,10 +100,14 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               <Link className="button" href={exportPdfHref}>Exportar PDF filtrado</Link>
             </>
           ) : null}
-          <Link className="button secondary" href={"/admin/settings/photos" as unknown as Route}>Fotos</Link>
-          <Link className="button secondary" href="/admin/settings/email">Correo</Link>
-          <Link className="button secondary" href={"/admin/account/password" as unknown as Route}>Contraseña</Link>
-          {admin.role === ADMIN_ROLE.SUPER_ADMIN ? (
+          {canManageAdministration(admin.role) ? (
+            <>
+              <Link className="button secondary" href={"/admin/settings/photos" as unknown as Route}>Fotos</Link>
+              <Link className="button secondary" href="/admin/settings/email">Correo</Link>
+              <Link className="button secondary" href={"/admin/account/password" as unknown as Route}>Contraseña</Link>
+            </>
+          ) : null}
+          {canManageUsers(admin.role) ? (
             <Link className="button secondary" href="/admin/users">Usuarios</Link>
           ) : null}
           <form action={logoutAction}><button className="secondary" type="submit">Salir</button></form>

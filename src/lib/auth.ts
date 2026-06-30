@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { SignJWT, jwtVerify } from "jose";
 import { compare, hash } from "bcryptjs";
 import { ADMIN_ROLE, SESSION_COOKIE_NAME, type AdminRoleValue } from "@/lib/constants";
+import { canManageAdministration } from "@/lib/permissions";
 import { prisma } from "@/lib/db";
 import { getEnv } from "@/lib/env";
 
@@ -124,5 +125,15 @@ export async function requireAdmin(): Promise<AdminSession> {
 export async function requireSuperAdmin(): Promise<AdminSession> {
   const admin = await requireAdmin();
   if (admin.role !== ADMIN_ROLE.SUPER_ADMIN) redirect("/admin?error=No%20ten%C3%A9s%20permiso%20para%20esta%20secci%C3%B3n.");
+  return admin;
+}
+
+// Guards administration/configuration areas (photos, email, password). Any
+// administrator role may pass; the RESERVATION_OPERATOR is redirected back to
+// the reservations panel. Used by both pages and server actions so direct URL
+// or action access is blocked server-side, not just hidden in the UI.
+export async function requireAdministrationAccess(): Promise<AdminSession> {
+  const admin = await requireAdmin();
+  if (!canManageAdministration(admin.role)) redirect("/admin?error=No%20ten%C3%A9s%20permiso%20para%20esta%20secci%C3%B3n.");
   return admin;
 }
