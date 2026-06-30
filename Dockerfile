@@ -1,5 +1,5 @@
 FROM node:24.15.0-trixie-slim AS base
-ARG NPM_VERSION=11.14.0
+ARG NPM_VERSION=11.18.0
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN apt-get update \
