@@ -1,4 +1,4 @@
-import { ADMIN_ROLE } from "@/lib/constants";
+import { ADMIN_ROLE, ADMIN_ROLE_LABELS } from "@/lib/constants";
 import { createAdminAction, toggleAdminActiveAction } from "@/app/actions";
 import { prisma } from "@/lib/db";
 import { requireSuperAdmin } from "@/lib/auth";
@@ -52,6 +52,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
             <select name="role" defaultValue={ADMIN_ROLE.ADMIN} required>
               <option value={ADMIN_ROLE.ADMIN}>Admin — reservas</option>
               <option value={ADMIN_ROLE.SUPER_ADMIN}>Super Admin — acceso total</option>
+              <option value={ADMIN_ROLE.RESERVATION_OPERATOR}>Operador de reservas — solo reservas</option>
             </select>
           </label>
           <button type="submit">Crear usuario admin</button>
@@ -66,7 +67,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
               <tr key={admin.id}>
                 <td>{admin.name}</td>
                 <td>{admin.email}</td>
-                <td><span className="status-pill">{admin.role === ADMIN_ROLE.SUPER_ADMIN ? "Super Admin" : "Admin"}</span></td>
+                <td><span className="status-pill">{ADMIN_ROLE_LABELS[admin.role]}</span></td>
                 <td><span className={`status-pill ${admin.isActive ? "status-confirmed" : "status-cancelled"}`}>{admin.isActive ? "Activo" : "Inactivo"}</span></td>
                 <td>{admin.createdAt.toISOString().slice(0, 10)}</td>
                 <td>

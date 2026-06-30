@@ -3,7 +3,7 @@ import {
   deleteZonePhotoAction,
 } from "@/app/actions";
 import { prisma } from "@/lib/db";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdministrationAccess } from "@/lib/auth";
 import { PHOTO_SUCCESS_MESSAGES, PHOTO_ERROR_MESSAGES, lookupMessage } from "@/lib/messages";
 import { LOCATION_AREA_VALUES } from "@/lib/reservations/location-config";
 import { getActiveReservationLocations } from "@/lib/reservations/locations";
@@ -27,7 +27,7 @@ export const metadata = { title: "Fotos de zonas · Reservas Tauras" };
 export const dynamic = "force-dynamic";
 
 export default async function AdminPhotosPage({ searchParams }: PhotosPageProps) {
-  await requireAdmin();
+  await requireAdministrationAccess();
   const params = await searchParams;
   const successMessage = params.ok ? lookupMessage(PHOTO_SUCCESS_MESSAGES, params.ok) : null;
   const errorMessage = lookupMessage(PHOTO_ERROR_MESSAGES, params.error);

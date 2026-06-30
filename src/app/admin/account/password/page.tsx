@@ -1,5 +1,5 @@
 import { changePasswordAction } from "@/app/actions";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdministrationAccess } from "@/lib/auth";
 import { CHANGE_PASSWORD_ERROR_MESSAGES, CHANGE_PASSWORD_SUCCESS_MESSAGES, lookupMessage } from "@/lib/messages";
 
 interface ChangePasswordPageProps {
@@ -10,7 +10,7 @@ export const metadata = { title: "Cambiar contraseña · Reservas Tauras" };
 export const dynamic = "force-dynamic";
 
 export default async function ChangePasswordPage({ searchParams }: ChangePasswordPageProps) {
-  await requireAdmin();
+  await requireAdministrationAccess();
   const params = await searchParams;
   const successMessage = lookupMessage(CHANGE_PASSWORD_SUCCESS_MESSAGES, params.ok);
   const errorMessage = lookupMessage(CHANGE_PASSWORD_ERROR_MESSAGES, params.error);

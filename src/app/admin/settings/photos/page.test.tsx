@@ -5,6 +5,7 @@ const zoneStore: Record<string, { areaValue: string; imagePath: string | null; i
 
 const mocks = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
+  requireAdministrationAccess: vi.fn(),
   locationFindMany: vi.fn(),
   zoneFindMany: vi.fn<(args: unknown) => Promise<typeof zoneStore[string]>>(),
   zoneUpsert: vi.fn(),
@@ -13,7 +14,10 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
-vi.mock("@/lib/auth", () => ({ requireAdmin: mocks.requireAdmin }));
+vi.mock("@/lib/auth", () => ({
+  requireAdmin: mocks.requireAdmin,
+  requireAdministrationAccess: mocks.requireAdministrationAccess,
+}));
 vi.mock("@/lib/db", () => ({
   prisma: {
     location: { findMany: mocks.locationFindMany },
@@ -96,6 +100,7 @@ describe("AdminSettingsPhotosPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.requireAdmin.mockResolvedValue(mockAdmin);
+    mocks.requireAdministrationAccess.mockResolvedValue(mockAdmin);
     mocks.locationFindMany.mockResolvedValue([
       { id: "loc-1", slug: "tauras-default", name: "TAURAS Steakhouse" },
       { id: "loc-2", slug: "tauras-bar-lounge", name: "TAURAS Bar & Lounge" },

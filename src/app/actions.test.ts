@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   redirect: vi.fn(),
   headers: vi.fn(),
   requireAdmin: vi.fn(),
+  requireAdministrationAccess: vi.fn(),
   requireSuperAdmin: vi.fn(),
   isValidAdminMutationOrigin: vi.fn(),
   getRequestSecurityContext: vi.fn(),
@@ -43,6 +44,7 @@ vi.mock("next/headers", () => ({ headers: mocks.headers }));
 
 vi.mock("@/lib/auth", () => ({
   requireAdmin: mocks.requireAdmin,
+  requireAdministrationAccess: mocks.requireAdministrationAccess,
   requireSuperAdmin: mocks.requireSuperAdmin,
   signInAdmin: vi.fn(),
   signOutAdmin: vi.fn(),
@@ -521,6 +523,33 @@ describe("resendConfirmationEmailAction", () => {
       resourceId: "reservation-resend-1",
       metadata: expect.objectContaining({ error: "SMTP timeout" }),
     }));
+  });
+
+  it("lets a RESERVATION_OPERATOR resend the confirmation email", async () => {
+    // Resend is a reservation operation, guarded by requireAdmin (admits the
+    // operator), not by requireAdministrationAccess.
+    mocks.requireAdmin.mockResolvedValue({
+      adminId: "operator-1",
+      name: "Operador de reservas",
+      email: "operador@tauras.test",
+      role: "RESERVATION_OPERATOR",
+    });
+    mocks.reservationFindUnique.mockResolvedValue(buildConfirmedReservation());
+
+    const formData = new FormData();
+    formData.set("reservationId", "reservation-resend-1");
+
+    const { resendConfirmationEmailAction } = await import("@/app/actions");
+    await expect(resendConfirmationEmailAction(formData)).rejects.toThrow(
+      "redirect:/admin/reservations/reservation-resend-1?ok=email-resent",
+    );
+
+    expect(mocks.sendReservationConfirmationEmail).toHaveBeenCalledOnce();
+    expect(mocks.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      event: "RESERVATION_CONFIRMATION_EMAIL_RESENT",
+      resourceId: "reservation-resend-1",
+    }));
+    expect(mocks.requireAdministrationAccess).not.toHaveBeenCalled();
   });
 });
 
@@ -1426,5 +1455,214 @@ describe("deleteZonePhotoAction", () => {
 
     expect(mocks.deleteZonePhoto).not.toHaveBeenCalled();
     expect(mocks.zoneUpdate).not.toHaveBeenCalled();
+  });
+});
+
+// Administration-only actions must be blocked server-side for roles that lack
+// administration access (e.g. RESERVATION_OPERATOR). The enforcement point is
+// requireAdministrationAccess, which redirects unauthorized roles before any
+// mutation runs. Here we simulate that guard rejecting and assert the action
+// aborts before touching headers, persistence, or audit logging.
+describe("administration actions deny non-administration roles", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.requireAdministrationAccess.mockRejectedValue(
+      new Error("redirect:/admin?error=No%20ten%C3%A9s%20permiso%20para%20esta%20secci%C3%B3n."),
+    );
+  });
+
+  it("blocks uploadZonePhotoAction before any photo work", async () => {
+    const formData = new FormData();
+    formData.set("locationId", "loc-1");
+    formData.set("areaValue", "Terraza");
+
+    const { uploadZonePhotoAction } = await import("@/app/actions");
+    await expect(uploadZonePhotoAction(formData)).rejects.toThrow(/redirect:\/admin\?error=/);
+
+    expect(mocks.headers).not.toHaveBeenCalled();
+    expect(mocks.validateImageFile).not.toHaveBeenCalled();
+    expect(mocks.saveZonePhoto).not.toHaveBeenCalled();
+    expect(mocks.zoneUpsert).not.toHaveBeenCalled();
+    expect(mocks.recordAuditLog).not.toHaveBeenCalled();
+  });
+
+  it("blocks deleteZonePhotoAction before any photo work", async () => {
+    const formData = new FormData();
+    formData.set("locationId", "loc-1");
+    formData.set("areaValue", "Terraza");
+
+    const { deleteZonePhotoAction } = await import("@/app/actions");
+    await expect(deleteZonePhotoAction(formData)).rejects.toThrow(/redirect:\/admin\?error=/);
+
+    expect(mocks.headers).not.toHaveBeenCalled();
+    expect(mocks.deleteZonePhoto).not.toHaveBeenCalled();
+    expect(mocks.zoneUpdate).not.toHaveBeenCalled();
+    expect(mocks.recordAuditLog).not.toHaveBeenCalled();
+  });
+
+  it("blocks changePasswordAction before any credential work", async () => {
+    const formData = new FormData();
+    formData.set("currentPassword", "current-password");
+    formData.set("newPassword", "brand-new-password");
+
+    const { changePasswordAction } = await import("@/app/actions");
+    await expect(changePasswordAction(formData)).rejects.toThrow(/redirect:\/admin\?error=/);
+
+    expect(mocks.headers).not.toHaveBeenCalled();
+    expect(mocks.recordAuditLog).not.toHaveBeenCalled();
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+// Reservation operations must work for a RESERVATION_OPERATOR. These actions are
+// guarded by requireAdmin (which admits the operator), NOT by
+// requireAdministrationAccess. Here requireAdmin resolves an operator session
+// and requireAdministrationAccess is wired to reject: if any action were
+// mistakenly gated behind administration access, it would surface that rejection
+// instead of completing the mutation asserted below.
+describe("reservation operations admit a RESERVATION_OPERATOR", () => {
+  const operator = {
+    adminId: "operator-1",
+    name: "Operador de reservas",
+    email: "operador@tauras.test",
+    role: "RESERVATION_OPERATOR",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.headers.mockResolvedValue(new Headers({ origin: "https://tauras.test" }));
+    mocks.requireAdmin.mockResolvedValue(operator);
+    mocks.requireAdministrationAccess.mockRejectedValue(new Error("redirect:/admin?error=denied"));
+    mocks.isValidAdminMutationOrigin.mockReturnValue(true);
+    mocks.getRequestSecurityContext.mockReturnValue({ ip: "127.0.0.1", userAgent: "vitest" });
+    mocks.recordAuditLog.mockResolvedValue(undefined);
+    mocks.sendReservationConfirmationEmail.mockResolvedValue(undefined);
+    mocks.sendReservationRejectionEmail.mockResolvedValue(undefined);
+    mocks.sendReservationCancellationEmail.mockResolvedValue(undefined);
+    mocks.transaction.mockImplementation(async (callback: (tx: {
+      reservation: { findUnique: typeof mocks.reservationFindUnique; update: typeof mocks.reservationUpdate };
+    }) => Promise<unknown>) => callback({
+      reservation: { findUnique: mocks.reservationFindUnique, update: mocks.reservationUpdate },
+    }));
+    mocks.locationFindFirst.mockResolvedValue({ id: "location-1" });
+    mocks.userUpsert.mockResolvedValue({ id: "user-1" });
+    mocks.reservationCreate.mockResolvedValue({ id: "reservation-op-1" });
+    mocks.redirect.mockImplementation((url: string) => {
+      throw new Error(`redirect:${url}`);
+    });
+  });
+
+  function pending() {
+    return {
+      id: "reservation-op-1",
+      userId: "user-1",
+      reservationDate: new Date("2026-09-10T00:00:00Z"),
+      reservationTime: "20:00",
+      area: "Patio",
+      partySize: 2,
+      notes: null,
+      status: RESERVATION_STATUS.PENDING,
+      customerLanguage: "es",
+      user: { id: "user-1", name: "Cliente", email: "cliente@tauras.test", phone: null },
+    };
+  }
+
+  function updated(status: string) {
+    return {
+      id: "reservation-op-1",
+      reservationDate: new Date("2026-09-10T00:00:00Z"),
+      reservationTime: "20:00",
+      area: "Patio",
+      customerLanguage: "es",
+      status,
+      user: { id: "user-1", name: "Cliente", email: "cliente@tauras.test", phone: null },
+      location: { id: "location-1", slug: "tauras-default", name: "TAURAS", shortName: "TAURAS", reservationLabel: "TAURAS" },
+    };
+  }
+
+  it("confirms a reservation", async () => {
+    mocks.reservationFindUnique.mockResolvedValue(pending());
+    mocks.reservationUpdate.mockResolvedValue(updated(RESERVATION_STATUS.CONFIRMED));
+
+    const formData = new FormData();
+    formData.set("reservationId", "reservation-op-1");
+
+    const { confirmReservationAction } = await import("@/app/actions");
+    await expect(confirmReservationAction(formData)).rejects.toThrow(
+      "redirect:/admin/reservations/reservation-op-1?ok=confirmed",
+    );
+
+    expect(mocks.reservationUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "reservation-op-1" },
+      data: expect.objectContaining({ status: RESERVATION_STATUS.CONFIRMED, confirmedById: "operator-1" }),
+    }));
+    expect(mocks.requireAdministrationAccess).not.toHaveBeenCalled();
+  });
+
+  it("rejects a reservation", async () => {
+    mocks.reservationFindUnique.mockResolvedValue(pending());
+    mocks.reservationUpdate.mockResolvedValue(updated(RESERVATION_STATUS.REJECTED));
+
+    const formData = new FormData();
+    formData.set("reservationId", "reservation-op-1");
+    formData.set("reason", "Sin disponibilidad");
+
+    const { rejectReservationAction } = await import("@/app/actions");
+    await expect(rejectReservationAction(formData)).rejects.toThrow(
+      "redirect:/admin/reservations/reservation-op-1?ok=rejected",
+    );
+
+    expect(mocks.reservationUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: RESERVATION_STATUS.REJECTED, rejectedById: "operator-1" }),
+    }));
+    expect(mocks.requireAdministrationAccess).not.toHaveBeenCalled();
+  });
+
+  it("cancels a reservation", async () => {
+    mocks.reservationFindUnique.mockResolvedValue(pending());
+    mocks.reservationUpdate.mockResolvedValue(updated(RESERVATION_STATUS.CANCELLED));
+
+    const formData = new FormData();
+    formData.set("reservationId", "reservation-op-1");
+    formData.set("reason", "Pedido del cliente");
+
+    const { cancelReservationAction } = await import("@/app/actions");
+    await expect(cancelReservationAction(formData)).rejects.toThrow(
+      "redirect:/admin/reservations/reservation-op-1?ok=cancelled",
+    );
+
+    expect(mocks.reservationUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: RESERVATION_STATUS.CANCELLED, cancelledById: "operator-1" }),
+    }));
+    expect(mocks.requireAdministrationAccess).not.toHaveBeenCalled();
+  });
+
+  it("creates a manual reservation", async () => {
+    const formData = new FormData();
+    const fields: Record<string, string> = {
+      name: "Cliente Manual",
+      email: "manual@tauras.test",
+      phone: "+57 300 123 4567",
+      reservationDate: "2026-12-31",
+      reservationTime: "21:30",
+      area: "Terraza",
+      partySize: "4",
+      source: "whatsapp",
+      status: RESERVATION_STATUS.PENDING,
+      notes: "Carga manual",
+      customerLanguage: "es",
+      locationId: "location-1",
+    };
+    for (const [key, value] of Object.entries(fields)) formData.set(key, value);
+
+    const { createManualReservationAction } = await import("@/app/actions");
+    await expect(createManualReservationAction(formData)).rejects.toThrow(
+      "redirect:/admin/reservations/reservation-op-1?ok=manual-created",
+    );
+
+    expect(mocks.reservationCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ createdByAdminId: "operator-1", locationId: "location-1" }),
+    }));
+    expect(mocks.requireAdministrationAccess).not.toHaveBeenCalled();
   });
 });
