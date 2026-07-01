@@ -88,6 +88,21 @@ export const PHOTO_ERROR_MESSAGES = {
 
 export type PhotoErrorKey = keyof typeof PHOTO_ERROR_MESSAGES;
 
+export const ACCOUNT_SUCCESS_MESSAGES = {
+  "account-updated": "Cuenta actualizada correctamente.",
+} as const;
+
+export type AccountSuccessKey = keyof typeof ACCOUNT_SUCCESS_MESSAGES;
+
+export const ACCOUNT_ERROR_MESSAGES = {
+  "invalid-request": "Solicitud inválida. Recargá la página e intentá nuevamente.",
+  "invalid-data": "Datos inválidos. Revisá el formulario.",
+  "wrong-current-password": "La contraseña actual no es correcta.",
+  "admin-email-exists": "Ya existe un admin con ese email.",
+} as const;
+
+export type AccountErrorKey = keyof typeof ACCOUNT_ERROR_MESSAGES;
+
 export const CHANGE_PASSWORD_SUCCESS_MESSAGES = {
   "password-changed": "Contraseña actualizada correctamente.",
 } as const;

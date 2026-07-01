@@ -47,12 +47,13 @@ vi.mock("@/lib/env", () => ({
 
 function seedSession(role: string): void {
   mocks.cookieGet.mockReturnValue({ value: "token" });
-  mocks.jwtVerify.mockResolvedValue({ payload: { sub: "admin-1" } });
+  mocks.jwtVerify.mockResolvedValue({ payload: { sub: "admin-1", sv: 0 } });
   mocks.adminFindUnique.mockResolvedValue({
     email: "admin@tauras.test",
     role,
     isActive: true,
     name: "Admin Tauras",
+    sessionVersion: 0,
   });
 }
 
@@ -82,6 +83,64 @@ describe("requireAdministrationAccess", () => {
     const { requireAdministrationAccess } = await import("@/lib/auth");
     await expect(requireAdministrationAccess()).rejects.toThrow(/redirect:\/admin\?error=/);
     expect(mocks.redirect).toHaveBeenCalledWith(expect.stringContaining("/admin?error="));
+  });
+});
+
+describe("session revocation via sessionVersion", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("rejects a validly-signed token whose sessionVersion is stale", async () => {
+    // Token was minted at version 0, but the admin's password was changed since
+    // (DB is now at version 1). The JWT still verifies, yet the session is dead.
+    mocks.cookieGet.mockReturnValue({ value: "token" });
+    mocks.jwtVerify.mockResolvedValue({ payload: { sub: "admin-1", sv: 0 } });
+    mocks.adminFindUnique.mockResolvedValue({
+      email: "admin@tauras.test",
+      role: ADMIN_ROLE.ADMIN,
+      isActive: true,
+      name: "Admin Tauras",
+      sessionVersion: 1,
+    });
+
+    const { getCurrentAdmin, requireAdmin } = await import("@/lib/auth");
+    expect(await getCurrentAdmin()).toBeNull();
+    await expect(requireAdmin()).rejects.toThrow("redirect:/admin/login");
+  });
+
+  it("admits a token whose sessionVersion still matches the admin", async () => {
+    mocks.cookieGet.mockReturnValue({ value: "token" });
+    mocks.jwtVerify.mockResolvedValue({ payload: { sub: "admin-1", sv: 3 } });
+    mocks.adminFindUnique.mockResolvedValue({
+      email: "admin@tauras.test",
+      role: ADMIN_ROLE.ADMIN,
+      isActive: true,
+      name: "Admin Tauras",
+      sessionVersion: 3,
+    });
+
+    const { getCurrentAdmin } = await import("@/lib/auth");
+    const session = await getCurrentAdmin();
+    expect(session?.adminId).toBe("admin-1");
+  });
+
+  it("treats a legacy token without sv as version 0 (deploy-safe)", async () => {
+    // Pre-revocation tokens carry no `sv`; they stay valid against a freshly
+    // backfilled admin at version 0, so a deploy does not force a mass logout.
+    mocks.cookieGet.mockReturnValue({ value: "token" });
+    mocks.jwtVerify.mockResolvedValue({ payload: { sub: "admin-1" } });
+    mocks.adminFindUnique.mockResolvedValue({
+      email: "admin@tauras.test",
+      role: ADMIN_ROLE.ADMIN,
+      isActive: true,
+      name: "Admin Tauras",
+      sessionVersion: 0,
+    });
+
+    const { getCurrentAdmin } = await import("@/lib/auth");
+    const session = await getCurrentAdmin();
+    expect(session?.adminId).toBe("admin-1");
   });
 });
 

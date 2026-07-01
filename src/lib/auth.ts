@@ -30,22 +30,47 @@ function getSessionSecret(): Uint8Array {
 // el módulo para que el primer login no pague el cómputo.
 const dummyHashPromise: Promise<string> = hash("not-a-real-password-just-padding", 12);
 
-// El JWT lleva sólo el `sub` (adminId). Email, name y role son mutables —
-// si los firmamos en el token, una sesión vieja queda con datos stale tras
-// un cambio de rol o nombre. Resolvemos eso leyendo siempre de DB en
-// `getCurrentAdmin`. Mantener el payload mínimo elimina la tentación de
-// confiar en él.
-export async function createAdminSession(admin: AdminSession): Promise<string> {
-  return new SignJWT({})
+const SESSION_MAX_AGE_SECONDS = 60 * 60 * 8;
+
+// Escribe la cookie de sesión con los flags de seguridad canónicos. Centralizado
+// para que login y refresco de sesión no se desincronicen.
+async function setSessionCookie(token: string): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.set(SESSION_COOKIE_NAME, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: SESSION_MAX_AGE_SECONDS,
+  });
+}
+
+// El JWT lleva `sub` (adminId) y `sv` (sessionVersion). Email, name y role son
+// mutables — si los firmamos en el token, una sesión vieja queda con datos
+// stale tras un cambio de rol o nombre. Resolvemos eso leyendo siempre de DB en
+// `getCurrentAdmin`. `sv` es la ÚNICA evidencia inmutable-en-emisión que sí
+// firmamos: es lo que permite revocar sesiones comparándola contra la DB.
+export async function createAdminSession(adminId: string, sessionVersion: number): Promise<string> {
+  return new SignJWT({ sv: sessionVersion })
     .setProtectedHeader({ alg: "HS256" })
-    .setSubject(admin.adminId)
+    .setSubject(adminId)
     .setIssuedAt()
     .setExpirationTime("8h")
     .sign(getSessionSecret());
 }
 
+// Re-emite la cookie de la sesión actual con una nueva sessionVersion. Se usa
+// justo después de que un admin cambia su PROPIA contraseña: la sesión que
+// ejecuta el cambio sigue viva, mientras que cualquier otra sesión previa de
+// ese admin queda revocada (su token conserva la versión anterior).
+export async function refreshSessionCookie(adminId: string, sessionVersion: number): Promise<void> {
+  const token = await createAdminSession(adminId, sessionVersion);
+  await setSessionCookie(token);
+}
+
 export interface VerifiedAdminSession {
   adminId: string;
+  sessionVersion: number;
 }
 
 export async function verifyAdminSession(token: string): Promise<VerifiedAdminSession | null> {
@@ -53,7 +78,12 @@ export async function verifyAdminSession(token: string): Promise<VerifiedAdminSe
     const result = await jwtVerify(token, getSessionSecret());
     const sub = result.payload.sub;
     if (typeof sub !== "string" || sub.length === 0) return null;
-    return { adminId: sub };
+    // Tokens emitidos antes de existir `sv` no lo traen: los leemos como
+    // versión 0 para que un deploy no fuerce un logout masivo. Quedan válidos
+    // sólo hasta que el primer cambio de contraseña suba la versión en DB.
+    const rawVersion = (result.payload as { sv?: unknown }).sv;
+    const sessionVersion = typeof rawVersion === "number" ? rawVersion : 0;
+    return { adminId: sub, sessionVersion };
   } catch {
     return null;
   }
@@ -77,16 +107,8 @@ export async function signInAdmin(email: string, password: string): Promise<Sign
   const passwordMatches = await compare(password, admin.passwordHash);
   if (!passwordMatches) return { ok: false, reason: "wrong-password" };
 
-  const token = await createAdminSession({ adminId: admin.id, email: admin.email, role: admin.role, name: admin.name });
-  const cookieStore = await cookies();
-
-  cookieStore.set(SESSION_COOKIE_NAME, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 60 * 60 * 8,
-  });
+  const token = await createAdminSession(admin.id, admin.sessionVersion);
+  await setSessionCookie(token);
 
   return {
     ok: true,
@@ -109,9 +131,14 @@ export async function getCurrentAdmin(): Promise<AdminSession | null> {
 
   const admin = await prisma.admin.findUnique({
     where: { id: session.adminId },
-    select: { email: true, role: true, isActive: true, name: true },
+    select: { email: true, role: true, isActive: true, name: true, sessionVersion: true },
   });
   if (!admin?.isActive) return null;
+
+  // Revocación de sesión: un cambio de contraseña incrementa `sessionVersion`,
+  // así que cualquier token emitido antes de ese cambio deja de coincidir y se
+  // rechaza acá — aunque siga siendo un JWT válidamente firmado y no expirado.
+  if (admin.sessionVersion !== session.sessionVersion) return null;
 
   return { adminId: session.adminId, email: admin.email, role: admin.role, name: admin.name };
 }

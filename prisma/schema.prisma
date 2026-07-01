@@ -26,6 +26,10 @@ model Admin {
   passwordHash String
   role         AdminRole     @default(ADMIN)
   isActive     Boolean       @default(true)
+  // Session revocation counter. Bumped on every password change so any JWT
+  // minted before the change stops matching in getCurrentAdmin and is rejected,
+  // even while it remains validly signed and unexpired.
+  sessionVersion Int         @default(0)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   confirmed    Reservation[] @relation("ReservationConfirmedBy")
