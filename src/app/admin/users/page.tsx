@@ -24,6 +24,10 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
   const admins = await prisma.admin.findMany({ orderBy: [{ role: "desc" }, { createdAt: "asc" }] });
   const successMessage = params.ok ? SUCCESS_MESSAGES[params.ok] : undefined;
   const errorMessage = lookupMessage(ADMIN_USERS_ERROR_MESSAGES, params.error);
+  // Edit is driven entirely by the URL (?edit=<adminId>), keeping this page a
+  // pure server component: no client JS, no per-row form cluttering the table.
+  const editingAdmin = params.edit ? admins.find((admin) => admin.id === params.edit) : undefined;
+  const editingIsSelf = editingAdmin?.id === currentAdmin.adminId;
 
   return (
     <main className="admin-shell">
@@ -73,44 +77,19 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                 <td>{admin.createdAt.toISOString().slice(0, 10)}</td>
                 <td>
                   <div className="row-actions">
-                    {admin.id === currentAdmin.adminId ? <span className="muted">Tu usuario</span> : (
+                    {admin.id === currentAdmin.adminId ? <span className="muted row-actions-note">Tu usuario</span> : (
                       <form action={toggleAdminActiveAction}>
                         <input type="hidden" name="adminId" value={admin.id} />
                         <button className="secondary table-button" type="submit">{admin.isActive ? "Desactivar" : "Activar"}</button>
                       </form>
                     )}
-                    <details className="row-edit">
-                      <summary className="secondary table-button">Editar</summary>
-                      <form action={editAdminAction} className="grid">
-                        <input type="hidden" name="adminId" value={admin.id} />
-                        {/* El estado activo se administra con el botón Activar/Desactivar; el
-                            form de edición lo preserva enviando el valor actual, para no
-                            cambiarlo al editar nombre/email/rol/contraseña. */}
-                        <input type="hidden" name="isActive" value={String(admin.isActive)} />
-                        <label>Nombre<input name="name" defaultValue={admin.name} required minLength={2} /></label>
-                        <label>Email<input name="email" type="email" defaultValue={admin.email} required /></label>
-                        {admin.id === currentAdmin.adminId ? (
-                          <>
-                            {/* Cambiar la contraseña propia exige la contraseña actual, que
-                                este form no pide: se hace desde "Mi cuenta". */}
-                            <p className="muted">Para cambiar tu contraseña, andá a <a href="/admin/account">Mi cuenta</a>.</p>
-                            <input type="hidden" name="role" value={admin.role} />
-                          </>
-                        ) : (
-                          <label>Nueva contraseña (opcional)<input name="password" type="password" minLength={10} autoComplete="new-password" placeholder="Dejá vacío para no cambiarla" /></label>
-                        )}
-                        {admin.id === currentAdmin.adminId ? null : (
-                          <label>Rol
-                            <select name="role" defaultValue={admin.role}>
-                              <option value={ADMIN_ROLE.ADMIN}>Admin — reservas</option>
-                              <option value={ADMIN_ROLE.SUPER_ADMIN}>Super Admin — acceso total</option>
-                              <option value={ADMIN_ROLE.RESERVATION_OPERATOR}>Operador de reservas — solo reservas</option>
-                            </select>
-                          </label>
-                        )}
-                        <button type="submit">Guardar cambios</button>
-                      </form>
-                    </details>
+                    <a
+                      className="button secondary table-button"
+                      href={`/admin/users?edit=${admin.id}`}
+                      aria-current={editingAdmin?.id === admin.id ? "true" : undefined}
+                    >
+                      Editar
+                    </a>
                   </div>
                 </td>
               </tr>
@@ -118,6 +97,56 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
           </tbody>
         </table>
       </div>
+
+      {editingAdmin ? (
+        <>
+          {/* Backdrop and close are plain links back to the list, so the whole
+              edit experience stays server-only (no client JS to open/close). */}
+          <a className="drawer-backdrop" href="/admin/users" aria-label="Cerrar edición" />
+          <aside className="edit-drawer" aria-label={`Editar ${editingAdmin.name}`}>
+            <div className="edit-drawer-head">
+              <div className="section-heading">
+                <p className="brand-kicker">Editar usuario</p>
+                <h2>{editingAdmin.name}</h2>
+                <p className="muted">{editingAdmin.email}</p>
+              </div>
+              <a className="drawer-close" href="/admin/users" aria-label="Cerrar edición">×</a>
+            </div>
+            <form action={editAdminAction} className="grid">
+              <input type="hidden" name="adminId" value={editingAdmin.id} />
+              {/* El estado activo se administra con el botón Activar/Desactivar; el
+                  form de edición lo preserva enviando el valor actual, para no
+                  cambiarlo al editar nombre/email/rol/contraseña. */}
+              <input type="hidden" name="isActive" value={String(editingAdmin.isActive)} />
+              <label>Nombre<input name="name" defaultValue={editingAdmin.name} required minLength={2} /></label>
+              <label>Email<input name="email" type="email" defaultValue={editingAdmin.email} required /></label>
+              {editingIsSelf ? (
+                <>
+                  {/* Cambiar la contraseña propia exige la contraseña actual, que
+                      este form no pide: se hace desde "Mi cuenta". */}
+                  <p className="muted">Para cambiar tu contraseña, andá a <a href="/admin/account">Mi cuenta</a>.</p>
+                  <input type="hidden" name="role" value={editingAdmin.role} />
+                </>
+              ) : (
+                <>
+                  <label>Nueva contraseña (opcional)<input name="password" type="password" minLength={10} autoComplete="new-password" placeholder="Dejá vacío para no cambiarla" /></label>
+                  <label>Rol
+                    <select name="role" defaultValue={editingAdmin.role}>
+                      <option value={ADMIN_ROLE.ADMIN}>Admin — reservas</option>
+                      <option value={ADMIN_ROLE.SUPER_ADMIN}>Super Admin — acceso total</option>
+                      <option value={ADMIN_ROLE.RESERVATION_OPERATOR}>Operador de reservas — solo reservas</option>
+                    </select>
+                  </label>
+                </>
+              )}
+              <div className="edit-drawer-actions">
+                <button type="submit">Guardar cambios</button>
+                <a className="button secondary" href="/admin/users">Cancelar</a>
+              </div>
+            </form>
+          </aside>
+        </>
+      ) : null}
     </main>
   );
 }
