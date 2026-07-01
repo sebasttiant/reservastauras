@@ -120,6 +120,61 @@ export const toggleAdminSchema = z.object({
   adminId: z.string().min(1),
 });
 
+// Optional password field: a blank/missing value means "keep the current
+// password" (normalized to `undefined`), while any provided value must satisfy
+// the same 10-char minimum used when creating admins. Kept as a shared helper
+// so both the super-admin edit form and the self-service account form apply the
+// exact same rule.
+const optionalNewPasswordSchema = z
+  .string()
+  .optional()
+  .transform((value) => (value && value.length > 0 ? value : undefined))
+  .refine((value) => value === undefined || value.length >= 10, {
+    error: "La contraseña debe tener al menos 10 caracteres.",
+  });
+
+// Super-admin editing any admin from /admin/users. `role` and `isActive` are
+// present here because only the super admin reaches this action; the server
+// action still re-derives permission and applies self-protections (no
+// self-deactivate, no self role change). `isActive` travels as an explicit
+// "true"/"false" select value rather than a checkbox so an unchecked box can
+// never be misread as "deactivate".
+export const editAdminSchema = z.object({
+  adminId: z.string().min(1, { error: "Admin inválido." }),
+  name: z.string().trim().min(2, { error: "Ingresá el nombre del admin." }).max(120),
+  email: z.email({ error: "Email inválido." }).transform((value) => value.toLowerCase()),
+  password: optionalNewPasswordSchema,
+  role: z.enum([ADMIN_ROLE.SUPER_ADMIN, ADMIN_ROLE.ADMIN, ADMIN_ROLE.RESERVATION_OPERATOR], { error: "Rol inválido." }),
+  isActive: z.enum(["true", "false"]).transform((value) => value === "true"),
+});
+
+// Self-service account edit. Deliberately NO role/isActive fields: those are
+// never accepted from this form, so a non-super admin cannot escalate. Changing
+// the password from here still requires the current password (verified in the
+// action), preserving the security property of the dedicated password flow.
+export const updateAccountSchema = z
+  .object({
+    name: z.string().trim().min(2, { error: "Ingresá tu nombre." }).max(120),
+    email: z.email({ error: "Email inválido." }).transform((value) => value.toLowerCase()),
+    currentPassword: z
+      .string()
+      .optional()
+      .transform((value) => (value && value.length > 0 ? value : undefined)),
+    newPassword: optionalNewPasswordSchema,
+    confirmPassword: z
+      .string()
+      .optional()
+      .transform((value) => (value && value.length > 0 ? value : undefined)),
+  })
+  .refine((data) => data.newPassword === undefined || data.currentPassword !== undefined, {
+    error: "Ingresá tu contraseña actual para cambiarla.",
+    path: ["currentPassword"],
+  })
+  .refine((data) => data.newPassword === undefined || data.newPassword === data.confirmPassword, {
+    error: "Las contraseñas nuevas no coinciden.",
+    path: ["confirmPassword"],
+  });
+
 export const changePasswordSchema = z
   .object({
     currentPassword: z.string().min(1, { error: "Ingresá tu contraseña actual." }),
@@ -134,6 +189,8 @@ export const changePasswordSchema = z
 export type ReservationRequestInput = z.infer<typeof reservationRequestSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type CreateAdminInput = z.infer<typeof createAdminSchema>;
+export type EditAdminInput = z.infer<typeof editAdminSchema>;
+export type UpdateAccountInput = z.infer<typeof updateAccountSchema>;
 export type ManualReservationInput = z.infer<typeof manualReservationSchema>;
 
 export function formDataToRecord(formData: FormData): Record<string, string> {

@@ -1,5 +1,5 @@
 import { ADMIN_ROLE, ADMIN_ROLE_LABELS } from "@/lib/constants";
-import { createAdminAction, toggleAdminActiveAction } from "@/app/actions";
+import { createAdminAction, editAdminAction, toggleAdminActiveAction } from "@/app/actions";
 import { prisma } from "@/lib/db";
 import { requireSuperAdmin } from "@/lib/auth";
 import { ADMIN_USERS_ERROR_MESSAGES, lookupMessage } from "@/lib/messages";
@@ -10,6 +10,7 @@ interface AdminUsersPageProps {
 
 const SUCCESS_MESSAGES: Record<string, string> = {
   "admin-created": "Admin creado correctamente.",
+  "admin-updated": "Usuario actualizado correctamente.",
   "admin-disabled": "Admin desactivado correctamente.",
   "admin-enabled": "Admin activado correctamente.",
 };
@@ -55,7 +56,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
               <option value={ADMIN_ROLE.RESERVATION_OPERATOR}>Operador de reservas — solo reservas</option>
             </select>
           </label>
-          <button type="submit">Crear usuario admin</button>
+          <button type="submit">Crear usuario</button>
         </form>
       </section>
 
@@ -71,12 +72,46 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                 <td><span className={`status-pill ${admin.isActive ? "status-confirmed" : "status-cancelled"}`}>{admin.isActive ? "Activo" : "Inactivo"}</span></td>
                 <td>{admin.createdAt.toISOString().slice(0, 10)}</td>
                 <td>
-                  {admin.id === currentAdmin.adminId ? <span className="muted">Tu usuario</span> : (
-                    <form action={toggleAdminActiveAction}>
-                      <input type="hidden" name="adminId" value={admin.id} />
-                      <button className="secondary table-button" type="submit">{admin.isActive ? "Desactivar" : "Activar"}</button>
-                    </form>
-                  )}
+                  <div className="row-actions">
+                    {admin.id === currentAdmin.adminId ? <span className="muted">Tu usuario</span> : (
+                      <form action={toggleAdminActiveAction}>
+                        <input type="hidden" name="adminId" value={admin.id} />
+                        <button className="secondary table-button" type="submit">{admin.isActive ? "Desactivar" : "Activar"}</button>
+                      </form>
+                    )}
+                    <details className="row-edit">
+                      <summary className="secondary table-button">Editar</summary>
+                      <form action={editAdminAction} className="grid">
+                        <input type="hidden" name="adminId" value={admin.id} />
+                        {/* El estado activo se administra con el botón Activar/Desactivar; el
+                            form de edición lo preserva enviando el valor actual, para no
+                            cambiarlo al editar nombre/email/rol/contraseña. */}
+                        <input type="hidden" name="isActive" value={String(admin.isActive)} />
+                        <label>Nombre<input name="name" defaultValue={admin.name} required minLength={2} /></label>
+                        <label>Email<input name="email" type="email" defaultValue={admin.email} required /></label>
+                        {admin.id === currentAdmin.adminId ? (
+                          <>
+                            {/* Cambiar la contraseña propia exige la contraseña actual, que
+                                este form no pide: se hace desde "Mi cuenta". */}
+                            <p className="muted">Para cambiar tu contraseña, andá a <a href="/admin/account">Mi cuenta</a>.</p>
+                            <input type="hidden" name="role" value={admin.role} />
+                          </>
+                        ) : (
+                          <label>Nueva contraseña (opcional)<input name="password" type="password" minLength={10} autoComplete="new-password" placeholder="Dejá vacío para no cambiarla" /></label>
+                        )}
+                        {admin.id === currentAdmin.adminId ? null : (
+                          <label>Rol
+                            <select name="role" defaultValue={admin.role}>
+                              <option value={ADMIN_ROLE.ADMIN}>Admin — reservas</option>
+                              <option value={ADMIN_ROLE.SUPER_ADMIN}>Super Admin — acceso total</option>
+                              <option value={ADMIN_ROLE.RESERVATION_OPERATOR}>Operador de reservas — solo reservas</option>
+                            </select>
+                          </label>
+                        )}
+                        <button type="submit">Guardar cambios</button>
+                      </form>
+                    </details>
+                  </div>
                 </td>
               </tr>
             ))}

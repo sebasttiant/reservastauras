@@ -16,8 +16,8 @@ import {
 } from "@/lib/i18n/language";
 import { canTransitionReservation } from "@/lib/reservations/state";
 import { resolveActiveLocationById, resolveActiveLocationBySlug } from "@/lib/reservations/locations";
-import { changePasswordSchema, createAdminSchema, formDataToRecord, loginSchema, manualReservationSchema, reservationRequestSchema, toggleAdminSchema } from "@/lib/validation";
-import { requireAdmin, requireAdministrationAccess, requireSuperAdmin, signInAdmin, signOutAdmin } from "@/lib/auth";
+import { changePasswordSchema, createAdminSchema, editAdminSchema, formDataToRecord, loginSchema, manualReservationSchema, reservationRequestSchema, toggleAdminSchema, updateAccountSchema } from "@/lib/validation";
+import { refreshSessionCookie, requireAdmin, requireAdministrationAccess, requireSuperAdmin, signInAdmin, signOutAdmin } from "@/lib/auth";
 import { getClientIp } from "@/lib/auth/client-ip";
 import { checkLoginAllowed, normalizeEmailKey, recordLoginAttempt } from "@/lib/auth/rate-limit";
 import { checkReservationRateLimit } from "@/lib/auth/reservation-rate-limit";
@@ -335,6 +335,150 @@ export async function toggleAdminActiveAction(formData: FormData): Promise<void>
   });
   revalidatePath("/admin/users");
   redirectWithSuccess("/admin/users", admin.isActive ? "admin-disabled" : "admin-enabled");
+}
+
+// Super-admin editing any admin from the users panel. Authorization is
+// re-derived server-side via requireSuperAdmin: even though the UI only shows
+// these controls to the super admin, a forged request from a lower role is
+// rejected here before any write. Role and active state are only applied to
+// OTHER admins; when the super admin edits their own row we preserve their role
+// and keep them active to avoid locking the account out.
+export async function editAdminAction(formData: FormData): Promise<void> {
+  const currentAdmin = await requireSuperAdmin();
+  const requestHeaders = await requireValidAdminMutationRequest("/admin/users");
+  const parsed = editAdminSchema.safeParse(formDataToRecord(formData));
+  if (!parsed.success) redirectWithError("/admin/users", "invalid-data");
+
+  const { adminId, name, email, password, role, isActive } = parsed.data;
+
+  const target = await prisma.admin.findUnique({
+    where: { id: adminId },
+    select: { id: true, role: true, isActive: true },
+  });
+  if (!target) redirectWithError("/admin/users", "admin-not-found");
+
+  const isSelf = adminId === currentAdmin.adminId;
+
+  // Self-protections mirror toggleAdminActiveAction: the super admin can update
+  // their own name/email but must not deactivate themselves or change their own
+  // role, which could break the current session or lock out the last super
+  // admin.
+  if (isSelf && !isActive) redirectWithError("/admin/users", "self-disable");
+
+  const nextRole = isSelf ? target.role : role;
+  const nextActive = isSelf ? true : isActive;
+
+  // A password change from THIS panel is only ever applied to OTHER admins.
+  // Changing one's own password requires proving the current password, which
+  // this form does not collect — so self password changes must go through
+  // /admin/account. Even a forged self-request with a password is ignored here.
+  const changesOthersPassword = Boolean(password) && !isSelf;
+
+  try {
+    await prisma.admin.update({
+      where: { id: adminId },
+      data: {
+        name,
+        email,
+        role: nextRole,
+        isActive: nextActive,
+        // Resetting another admin's password bumps their sessionVersion, which
+        // revokes every session that user still had open (the whole point of a
+        // reset on a compromised account).
+        ...(changesOthersPassword
+          ? { passwordHash: await hash(password!, 12), sessionVersion: { increment: 1 } }
+          : {}),
+      },
+    });
+  } catch (error: unknown) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      redirectWithError("/admin/users", "admin-email-exists");
+    }
+    throw error;
+  }
+
+  await recordAuditLog({
+    event: AUDIT_EVENT.ADMIN_UPDATED,
+    actor: currentAdmin,
+    request: getRequestSecurityContext(requestHeaders),
+    resourceType: "ADMIN",
+    resourceId: adminId,
+    metadata: { role: nextRole, isActive: nextActive, passwordChanged: changesOthersPassword, self: isSelf },
+  });
+
+  revalidatePath("/admin/users");
+  redirectWithSuccess("/admin/users", "admin-updated");
+}
+
+// Self-service account edit for ANY administrator, including the
+// RESERVATION_OPERATOR that has no other administration surface. Security rests
+// on two facts: requireAdmin resolves the CURRENT session, and the target is
+// always `admin.adminId` — this action never reads a target id from the form,
+// so a non-super admin cannot reach another user's record. Role and active
+// state are not accepted here at all, so self-service can never escalate.
+export async function updateOwnAccountAction(formData: FormData): Promise<void> {
+  const admin = await requireAdmin();
+  const requestHeaders = await requireValidAdminMutationRequest("/admin/account");
+  const parsed = updateAccountSchema.safeParse(formDataToRecord(formData));
+  if (!parsed.success) redirectWithError("/admin/account", "invalid-data");
+
+  const { name, email, currentPassword, newPassword } = parsed.data;
+
+  let passwordHash: string | undefined;
+  if (newPassword) {
+    const stored = await prisma.admin.findUnique({
+      where: { id: admin.adminId },
+      select: { passwordHash: true },
+    });
+    if (!stored) redirectWithError("/admin/account", "invalid-request");
+
+    // Changing the password from the profile form still requires proving the
+    // current password, keeping the same defense-in-depth as the dedicated
+    // change-password flow. The schema guarantees currentPassword is present
+    // whenever newPassword is set.
+    const currentMatches = await compare(currentPassword ?? "", stored.passwordHash);
+    if (!currentMatches) redirectWithError("/admin/account", "wrong-current-password");
+
+    passwordHash = await hash(newPassword, 12);
+  }
+
+  let updatedSessionVersion = 0;
+  try {
+    const updated = await prisma.admin.update({
+      where: { id: admin.adminId },
+      data: {
+        name,
+        email,
+        // Changing your own password revokes your other sessions by bumping
+        // sessionVersion; the current session is kept alive below by re-issuing
+        // its cookie with the new version.
+        ...(passwordHash ? { passwordHash, sessionVersion: { increment: 1 } } : {}),
+      },
+      select: { sessionVersion: true },
+    });
+    updatedSessionVersion = updated.sessionVersion;
+  } catch (error: unknown) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      redirectWithError("/admin/account", "admin-email-exists");
+    }
+    throw error;
+  }
+
+  if (passwordHash) {
+    await refreshSessionCookie(admin.adminId, updatedSessionVersion);
+  }
+
+  await recordAuditLog({
+    event: AUDIT_EVENT.ADMIN_UPDATED,
+    actor: admin,
+    request: getRequestSecurityContext(requestHeaders),
+    resourceType: "ADMIN",
+    resourceId: admin.adminId,
+    metadata: { self: true, passwordChanged: Boolean(passwordHash) },
+  });
+
+  revalidatePath("/admin/account");
+  redirectWithSuccess("/admin/account", "account-updated");
 }
 
 type ConfirmFailure =
@@ -842,10 +986,14 @@ export async function changePasswordAction(formData: FormData): Promise<void> {
   const currentMatches = await compare(currentPassword, stored.passwordHash);
   if (!currentMatches) redirectWithError("/admin/account/password", "wrong-current-password");
 
-  await prisma.admin.update({
+  const updated = await prisma.admin.update({
     where: { id: admin.adminId },
-    data: { passwordHash: await hash(newPassword, 12) },
+    // Bump sessionVersion to revoke other open sessions, then re-issue this
+    // session's cookie so the admin who just changed their password stays in.
+    data: { passwordHash: await hash(newPassword, 12), sessionVersion: { increment: 1 } },
+    select: { sessionVersion: true },
   });
+  await refreshSessionCookie(admin.adminId, updated.sessionVersion);
 
   await recordAuditLog({
     event: AUDIT_EVENT.ADMIN_PASSWORD_CHANGED,

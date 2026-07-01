@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
   requireAdministrationAccess: vi.fn(),
   requireSuperAdmin: vi.fn(),
+  refreshSessionCookie: vi.fn(),
   isValidAdminMutationOrigin: vi.fn(),
   getRequestSecurityContext: vi.fn(),
   recordAuditLog: vi.fn(),
@@ -35,6 +36,11 @@ const mocks = vi.hoisted(() => ({
   zoneUpsert: vi.fn(),
   zoneUpdate: vi.fn(),
   locationFindUnique: vi.fn(),
+  adminCreate: vi.fn(),
+  adminFindUnique: vi.fn(),
+  adminUpdate: vi.fn(),
+  hash: vi.fn(),
+  compare: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -46,6 +52,7 @@ vi.mock("@/lib/auth", () => ({
   requireAdmin: mocks.requireAdmin,
   requireAdministrationAccess: mocks.requireAdministrationAccess,
   requireSuperAdmin: mocks.requireSuperAdmin,
+  refreshSessionCookie: mocks.refreshSessionCookie,
   signInAdmin: vi.fn(),
   signOutAdmin: vi.fn(),
 }));
@@ -64,8 +71,19 @@ vi.mock("@/lib/security/request", () => ({
     RESERVATION_CANCELLED: "RESERVATION_CANCELLED",
     PHOTO_UPLOADED: "PHOTO_UPLOADED",
     PHOTO_DELETED: "PHOTO_DELETED",
+    ADMIN_CREATED: "ADMIN_CREATED",
+    ADMIN_UPDATED: "ADMIN_UPDATED",
+    ADMIN_STATUS_TOGGLED: "ADMIN_STATUS_TOGGLED",
   },
   recordAuditLog: mocks.recordAuditLog,
+}));
+
+vi.mock("bcryptjs", () => ({
+  // Deterministic, fast stand-ins so tests can assert hashing/verification
+  // without paying the real bcrypt cost. `hash(pw)` -> `hashed:<pw>` and
+  // `compare(pw, stored)` is true only when `stored === hashed:<pw>`.
+  hash: mocks.hash,
+  compare: mocks.compare,
 }));
 
 vi.mock("@/lib/email", () => ({
@@ -90,9 +108,9 @@ vi.mock("@/lib/db", () => ({
       upsert: mocks.userUpsert,
     },
     admin: {
-      create: vi.fn(),
-      findUnique: vi.fn(),
-      update: vi.fn(),
+      create: mocks.adminCreate,
+      findUnique: mocks.adminFindUnique,
+      update: mocks.adminUpdate,
     },
     zone: {
       findUnique: mocks.zoneFindUnique,
@@ -1664,5 +1682,346 @@ describe("reservation operations admit a RESERVATION_OPERATOR", () => {
       data: expect.objectContaining({ createdByAdminId: "operator-1", locationId: "location-1" }),
     }));
     expect(mocks.requireAdministrationAccess).not.toHaveBeenCalled();
+  });
+});
+
+// User editing: super admin edits anyone from /admin/users, self-service edit
+// for any role from /admin/account. Authorization is enforced server-side, so
+// these tests assert the guards and the field-level rules (role/active only for
+// the super admin editing others; optional password never overwrites; new
+// password is hashed).
+describe("editAdminAction", () => {
+  const superAdmin = {
+    adminId: "super-1",
+    name: "Super Admin",
+    email: "super@tauras.test",
+    role: "SUPER_ADMIN",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.headers.mockResolvedValue(new Headers({ origin: "https://tauras.test" }));
+    mocks.requireSuperAdmin.mockResolvedValue(superAdmin);
+    mocks.isValidAdminMutationOrigin.mockReturnValue(true);
+    mocks.getRequestSecurityContext.mockReturnValue({ ipAddress: "127.0.0.1", userAgent: "vitest" });
+    mocks.recordAuditLog.mockResolvedValue(undefined);
+    mocks.adminUpdate.mockResolvedValue({ id: "admin-2" });
+    mocks.hash.mockImplementation(async (pw: string) => `hashed:${pw}`);
+    mocks.compare.mockImplementation(async (pw: string, stored: string) => stored === `hashed:${pw}`);
+    mocks.redirect.mockImplementation((url: string) => {
+      throw new Error(`redirect:${url}`);
+    });
+  });
+
+  function editForm(overrides: Record<string, string> = {}): FormData {
+    const formData = new FormData();
+    const fields = {
+      adminId: "admin-2",
+      name: "Nombre Editado",
+      email: "Editado@Tauras.test",
+      password: "",
+      role: "RESERVATION_OPERATOR",
+      isActive: "true",
+      ...overrides,
+    };
+    for (const [key, value] of Object.entries(fields)) formData.set(key, value);
+    return formData;
+  }
+
+  it("lets the SUPER_ADMIN edit another admin (name, email, role)", async () => {
+    mocks.adminFindUnique.mockResolvedValue({ id: "admin-2", role: "ADMIN", isActive: true });
+
+    const { editAdminAction } = await import("@/app/actions");
+    await expect(editAdminAction(editForm())).rejects.toThrow(
+      "redirect:/admin/users?ok=admin-updated",
+    );
+
+    expect(mocks.adminUpdate).toHaveBeenCalledWith({
+      where: { id: "admin-2" },
+      data: {
+        name: "Nombre Editado",
+        email: "editado@tauras.test",
+        role: "RESERVATION_OPERATOR",
+        isActive: true,
+      },
+    });
+    // Empty password must NOT overwrite the stored hash.
+    expect(mocks.hash).not.toHaveBeenCalled();
+    expect(mocks.adminUpdate.mock.calls[0][0].data).not.toHaveProperty("passwordHash");
+  });
+
+  it("hashes a new password when the SUPER_ADMIN provides one", async () => {
+    mocks.adminFindUnique.mockResolvedValue({ id: "admin-2", role: "ADMIN", isActive: true });
+
+    const { editAdminAction } = await import("@/app/actions");
+    await expect(
+      editAdminAction(editForm({ password: "brand-new-secret" })),
+    ).rejects.toThrow("redirect:/admin/users?ok=admin-updated");
+
+    expect(mocks.hash).toHaveBeenCalledWith("brand-new-secret", 12);
+    // Resetting another admin's password must also revoke their open sessions.
+    expect(mocks.adminUpdate.mock.calls[0][0].data).toMatchObject({
+      passwordHash: "hashed:brand-new-secret",
+      sessionVersion: { increment: 1 },
+    });
+  });
+
+  it("never changes the super admin's own password from the users panel", async () => {
+    mocks.adminFindUnique.mockResolvedValue({ id: "super-1", role: "SUPER_ADMIN", isActive: true });
+
+    const { editAdminAction } = await import("@/app/actions");
+    // Even a forged self-request carrying a password must not touch the hash:
+    // self password changes require the current password, collected only in
+    // /admin/account.
+    await expect(
+      editAdminAction(editForm({ adminId: "super-1", password: "sneaky-new-secret" })),
+    ).rejects.toThrow("redirect:/admin/users?ok=admin-updated");
+
+    expect(mocks.hash).not.toHaveBeenCalled();
+    const data = mocks.adminUpdate.mock.calls[0][0].data;
+    expect(data).not.toHaveProperty("passwordHash");
+    expect(data).not.toHaveProperty("sessionVersion");
+  });
+
+  it("preserves the super admin's own role and active state on self-edit", async () => {
+    mocks.adminFindUnique.mockResolvedValue({ id: "super-1", role: "SUPER_ADMIN", isActive: true });
+
+    const { editAdminAction } = await import("@/app/actions");
+    // Attempt to downgrade own role and keep active; role change must be ignored.
+    await expect(
+      editAdminAction(editForm({ adminId: "super-1", role: "ADMIN", isActive: "true" })),
+    ).rejects.toThrow("redirect:/admin/users?ok=admin-updated");
+
+    expect(mocks.adminUpdate.mock.calls[0][0].data).toMatchObject({
+      role: "SUPER_ADMIN",
+      isActive: true,
+    });
+  });
+
+  it("refuses to let the super admin deactivate themselves", async () => {
+    mocks.adminFindUnique.mockResolvedValue({ id: "super-1", role: "SUPER_ADMIN", isActive: true });
+
+    const { editAdminAction } = await import("@/app/actions");
+    await expect(
+      editAdminAction(editForm({ adminId: "super-1", isActive: "false" })),
+    ).rejects.toThrow("redirect:/admin/users?error=self-disable");
+
+    expect(mocks.adminUpdate).not.toHaveBeenCalled();
+  });
+
+  it("reports a duplicate email as admin-email-exists", async () => {
+    mocks.adminFindUnique.mockResolvedValue({ id: "admin-2", role: "ADMIN", isActive: true });
+    mocks.adminUpdate.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError("Unique constraint", { code: "P2002", clientVersion: "test" }),
+    );
+
+    const { editAdminAction } = await import("@/app/actions");
+    await expect(editAdminAction(editForm())).rejects.toThrow(
+      "redirect:/admin/users?error=admin-email-exists",
+    );
+  });
+});
+
+describe("editAdminAction denies non-super admins", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // requireSuperAdmin redirects any non-super role (ADMIN or
+    // RESERVATION_OPERATOR) before the action does any work.
+    mocks.requireSuperAdmin.mockRejectedValue(
+      new Error("redirect:/admin?error=No%20ten%C3%A9s%20permiso%20para%20esta%20secci%C3%B3n."),
+    );
+  });
+
+  it("blocks editAdminAction before any read or write", async () => {
+    const formData = new FormData();
+    formData.set("adminId", "victim-1");
+    formData.set("name", "Hacked");
+    formData.set("email", "hacked@tauras.test");
+    formData.set("role", "SUPER_ADMIN");
+    formData.set("isActive", "true");
+
+    const { editAdminAction } = await import("@/app/actions");
+    await expect(editAdminAction(formData)).rejects.toThrow(/redirect:\/admin\?error=/);
+
+    expect(mocks.headers).not.toHaveBeenCalled();
+    expect(mocks.adminFindUnique).not.toHaveBeenCalled();
+    expect(mocks.adminUpdate).not.toHaveBeenCalled();
+    expect(mocks.recordAuditLog).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateOwnAccountAction", () => {
+  const operator = {
+    adminId: "operator-1",
+    name: "Operador",
+    email: "operador@tauras.test",
+    role: "RESERVATION_OPERATOR",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.headers.mockResolvedValue(new Headers({ origin: "https://tauras.test" }));
+    mocks.requireAdmin.mockResolvedValue(operator);
+    mocks.isValidAdminMutationOrigin.mockReturnValue(true);
+    mocks.getRequestSecurityContext.mockReturnValue({ ipAddress: "127.0.0.1", userAgent: "vitest" });
+    mocks.recordAuditLog.mockResolvedValue(undefined);
+    mocks.adminUpdate.mockResolvedValue({ id: "operator-1" });
+    mocks.hash.mockImplementation(async (pw: string) => `hashed:${pw}`);
+    mocks.compare.mockImplementation(async (pw: string, stored: string) => stored === `hashed:${pw}`);
+    mocks.redirect.mockImplementation((url: string) => {
+      throw new Error(`redirect:${url}`);
+    });
+  });
+
+  function accountForm(overrides: Record<string, string> = {}): FormData {
+    const formData = new FormData();
+    const fields = {
+      name: "Operador Actualizado",
+      email: "Nuevo@Tauras.test",
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+      ...overrides,
+    };
+    for (const [key, value] of Object.entries(fields)) formData.set(key, value);
+    return formData;
+  }
+
+  it("lets a RESERVATION_OPERATOR edit their own name and email", async () => {
+    const { updateOwnAccountAction } = await import("@/app/actions");
+    await expect(updateOwnAccountAction(accountForm())).rejects.toThrow(
+      "redirect:/admin/account?ok=account-updated",
+    );
+
+    expect(mocks.adminUpdate).toHaveBeenCalledWith({
+      where: { id: "operator-1" },
+      data: { name: "Operador Actualizado", email: "nuevo@tauras.test" },
+      select: { sessionVersion: true },
+    });
+    // Empty password fields must NOT overwrite the stored hash.
+    expect(mocks.hash).not.toHaveBeenCalled();
+    expect(mocks.adminUpdate.mock.calls[0][0].data).not.toHaveProperty("passwordHash");
+  });
+
+  it("lets an ADMIN edit their own account too", async () => {
+    mocks.requireAdmin.mockResolvedValue({
+      adminId: "admin-9",
+      name: "Admin",
+      email: "admin@tauras.test",
+      role: "ADMIN",
+    });
+    mocks.adminUpdate.mockResolvedValue({ id: "admin-9" });
+
+    const { updateOwnAccountAction } = await import("@/app/actions");
+    await expect(updateOwnAccountAction(accountForm())).rejects.toThrow(
+      "redirect:/admin/account?ok=account-updated",
+    );
+
+    expect(mocks.adminUpdate.mock.calls[0][0].where).toEqual({ id: "admin-9" });
+  });
+
+  it("always targets the session admin and ignores any adminId in the form", async () => {
+    const { updateOwnAccountAction } = await import("@/app/actions");
+    await expect(
+      updateOwnAccountAction(accountForm({ adminId: "some-other-admin" } as Record<string, string>)),
+    ).rejects.toThrow("redirect:/admin/account?ok=account-updated");
+
+    // A non-super admin can never reach another user's record: the target is
+    // derived from the session, not from the form.
+    expect(mocks.adminUpdate.mock.calls[0][0].where).toEqual({ id: "operator-1" });
+  });
+
+  it("hashes a new password, bumps sessionVersion, and refreshes the cookie", async () => {
+    mocks.adminFindUnique.mockResolvedValue({ passwordHash: "hashed:current-secret" });
+    mocks.adminUpdate.mockResolvedValue({ sessionVersion: 7 });
+
+    const { updateOwnAccountAction } = await import("@/app/actions");
+    await expect(
+      updateOwnAccountAction(
+        accountForm({
+          currentPassword: "current-secret",
+          newPassword: "brand-new-secret",
+          confirmPassword: "brand-new-secret",
+        }),
+      ),
+    ).rejects.toThrow("redirect:/admin/account?ok=account-updated");
+
+    expect(mocks.compare).toHaveBeenCalledWith("current-secret", "hashed:current-secret");
+    expect(mocks.hash).toHaveBeenCalledWith("brand-new-secret", 12);
+    expect(mocks.adminUpdate.mock.calls[0][0].data).toMatchObject({
+      passwordHash: "hashed:brand-new-secret",
+      sessionVersion: { increment: 1 },
+    });
+    // The acting session stays alive with the new version; other sessions die.
+    expect(mocks.refreshSessionCookie).toHaveBeenCalledWith("operator-1", 7);
+  });
+
+  it("does not touch sessionVersion or refresh the cookie when only name/email change", async () => {
+    const { updateOwnAccountAction } = await import("@/app/actions");
+    await expect(updateOwnAccountAction(accountForm())).rejects.toThrow(
+      "redirect:/admin/account?ok=account-updated",
+    );
+
+    expect(mocks.adminUpdate.mock.calls[0][0].data).not.toHaveProperty("sessionVersion");
+    expect(mocks.refreshSessionCookie).not.toHaveBeenCalled();
+  });
+
+  it("rejects a wrong current password without touching the record", async () => {
+    mocks.adminFindUnique.mockResolvedValue({ passwordHash: "hashed:the-real-one" });
+
+    const { updateOwnAccountAction } = await import("@/app/actions");
+    await expect(
+      updateOwnAccountAction(
+        accountForm({
+          currentPassword: "wrong-password",
+          newPassword: "brand-new-secret",
+          confirmPassword: "brand-new-secret",
+        }),
+      ),
+    ).rejects.toThrow("redirect:/admin/account?error=wrong-current-password");
+
+    expect(mocks.hash).not.toHaveBeenCalled();
+    expect(mocks.adminUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe("changePasswordAction revokes other sessions", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.headers.mockResolvedValue(new Headers({ origin: "https://tauras.test" }));
+    mocks.requireAdministrationAccess.mockResolvedValue({
+      adminId: "admin-1",
+      name: "Admin",
+      email: "admin@tauras.test",
+      role: "ADMIN",
+    });
+    mocks.isValidAdminMutationOrigin.mockReturnValue(true);
+    mocks.getRequestSecurityContext.mockReturnValue({ ipAddress: "127.0.0.1", userAgent: "vitest" });
+    mocks.recordAuditLog.mockResolvedValue(undefined);
+    mocks.adminFindUnique.mockResolvedValue({ passwordHash: "hashed:current-secret" });
+    mocks.adminUpdate.mockResolvedValue({ sessionVersion: 4 });
+    mocks.hash.mockImplementation(async (pw: string) => `hashed:${pw}`);
+    mocks.compare.mockImplementation(async (pw: string, stored: string) => stored === `hashed:${pw}`);
+    mocks.redirect.mockImplementation((url: string) => {
+      throw new Error(`redirect:${url}`);
+    });
+  });
+
+  it("bumps sessionVersion and refreshes the cookie on success", async () => {
+    const formData = new FormData();
+    formData.set("currentPassword", "current-secret");
+    formData.set("newPassword", "brand-new-secret");
+    formData.set("confirmPassword", "brand-new-secret");
+
+    const { changePasswordAction } = await import("@/app/actions");
+    await expect(changePasswordAction(formData)).rejects.toThrow(
+      "redirect:/admin/account/password?ok=password-changed",
+    );
+
+    expect(mocks.adminUpdate.mock.calls[0][0].data).toMatchObject({
+      passwordHash: "hashed:brand-new-secret",
+      sessionVersion: { increment: 1 },
+    });
+    expect(mocks.refreshSessionCookie).toHaveBeenCalledWith("admin-1", 4);
   });
 });

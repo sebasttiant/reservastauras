@@ -110,6 +110,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           {canManageUsers(admin.role) ? (
             <Link className="button secondary" href="/admin/users">Usuarios</Link>
           ) : null}
+          <Link className="button secondary" href={"/admin/account" as unknown as Route}>Mi cuenta</Link>
           <form action={logoutAction}><button className="secondary" type="submit">Salir</button></form>
         </div>
       </header>
