@@ -104,4 +104,23 @@ describe("AdminPage navigation by role", () => {
     expect(html).toContain(EMAIL_HREF);
     expect(html).toContain(PASSWORD_HREF);
   });
+
+  it("renders reservation creation timestamps in Colombia time", async () => {
+    mocks.reservationFindMany.mockResolvedValueOnce([{
+      id: "reservation-1",
+      reservationDate: new Date("2026-08-04T00:00:00.000Z"),
+      reservationTime: "20:00",
+      status: "PENDING",
+      area: "Patio",
+      createdAt: new Date("2026-08-04T00:23:22.939Z"),
+      user: { name: "Cliente", email: "cliente@tauras.test", phone: null },
+      location: { shortName: "TAURAS" },
+    }]);
+
+    const html = await renderAdminPage(ADMIN_ROLE.RESERVATION_OPERATOR);
+
+    expect(html).toMatch(/3 de agosto de 2026/i);
+    expect(html).toMatch(/7:23/);
+    expect(html).toMatch(/p\.\s?m\./i);
+  });
 });
