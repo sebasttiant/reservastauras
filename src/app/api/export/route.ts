@@ -11,39 +11,11 @@ import {
   parseExportFilters,
   summarizeFilters,
 } from "@/lib/reservations/export-filters";
+import { formatBusinessIssueDate } from "@/lib/reservations/business-date";
+import { buildReservationExportRows, getReservationExportPdfFilename } from "@/lib/reservations/export-data";
 import { getRequestSecurityContext } from "@/lib/security/request";
 import ExcelJS from "exceljs";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
-
-function formatDate(value: Date): string {
-  return value.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
-
-function formatDateTime(value: Date | null): string {
-  if (!value) return "-";
-  return value.toLocaleString("es-AR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function formatReservationSource(source: string): string {
-  const labels: Record<string, string> = {
-    web: "Web",
-    whatsapp: "WhatsApp",
-    llamada: "Llamada",
-    instagram: "Instagram",
-    facebook: "Facebook",
-    crm: "CRM",
-    presencial: "Presencial",
-    otro: "Otro",
-  };
-
-  return labels[source] ?? source;
-}
 
 export async function GET(request: Request) {
   const admin = await requireAdmin();
@@ -97,38 +69,9 @@ export async function GET(request: Request) {
     );
   }
 
-  const data = reservations.map((r) => ({
-    ID: r.id,
-    Fecha: formatDate(r.reservationDate),
-    Hora: r.reservationTime,
-    Cliente: r.user.name,
-    Email: r.user.email,
-    Teléfono: r.user.phone ?? "",
-    Sede: r.location.reservationLabel,
-    Área: r.area ?? "Sin área",
-    Origen: formatReservationSource(r.source),
-    Personas: r.partySize,
-    Estado: r.status,
-    "Creada en": formatDateTime(r.createdAt),
-    "Cargada por": r.createdByAdmin ? `${r.createdByAdmin.name} <${r.createdByAdmin.email}>` : "Web / cliente",
-    "Actualizada en": formatDateTime(r.updatedAt),
-    "Confirmada en": formatDateTime(r.confirmedAt),
-    "Rechazada en": formatDateTime(r.rejectedAt),
-    "Cancelada en": formatDateTime(r.cancelledAt),
-    "Confirmado por": r.confirmedBy ? `${r.confirmedBy.name} <${r.confirmedBy.email}>` : "",
-    "Error email": r.emailError ?? "",
-    Notas: r.notes ?? "",
-    // Atribución de marketing del link original. Se exponen en el export para
-    // que marketing pueda analizar campañas sin entrar a la DB. El PDF usa
-    // claves explícitas, así que estas columnas aparecen en JSON/XLSX (que se
-    // alimentan del mismo `data`) sin romper el layout del PDF.
-    "Landing Venue": r.landingVenue ?? "",
-    "UTM Source": r.utmSource ?? "",
-    "UTM Medium": r.utmMedium ?? "",
-    "UTM Campaign": r.utmCampaign ?? "",
-    "UTM Content": r.utmContent ?? "",
-    "UTM Term": r.utmTerm ?? "",
-  }));
+  // JSON, XLSX, and PDF render from these same preformatted rows so timestamps
+  // cannot diverge across export formats.
+  const data = buildReservationExportRows(reservations);
 
   await recordAuditLog({
     event: AUDIT_EVENT.RESERVATIONS_EXPORTED,
@@ -144,11 +87,7 @@ export async function GET(request: Request) {
 
   const summaryRows = summarizeFilters(filters);
   const issuedAt = new Date();
-  const issuedAtLong = issuedAt.toLocaleDateString("es-AR", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+  const issuedAtLong = formatBusinessIssueDate(issuedAt);
 
   if (format === "json") {
     return NextResponse.json(data, {
@@ -607,7 +546,7 @@ export async function GET(request: Request) {
     return new NextResponse(Buffer.from(pdfBytes), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="reservas-tauras-${new Date().toISOString().slice(0, 10)}.pdf"`,
+        "Content-Disposition": `attachment; filename="${getReservationExportPdfFilename(issuedAt)}"`,
       },
     });
   }

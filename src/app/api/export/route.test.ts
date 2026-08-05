@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import ExcelJS from "exceljs";
+import { PDFDocument, decodePDFRawStream } from "pdf-lib";
+import { buildReservationExportRows } from "@/lib/reservations/export-data";
 
 const mocks = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
@@ -31,6 +34,21 @@ const ADMIN = {
   role: "SUPER_ADMIN" as const,
   name: "Admin",
 };
+
+async function extractPdfVisibleText(bytes: Uint8Array): Promise<string> {
+  const document = await PDFDocument.load(bytes);
+  const textOperations: string[] = [];
+
+  for (const [, object] of document.context.enumerateIndirectObjects()) {
+    if (object.constructor.name !== "PDFRawStream") continue;
+    const contents = decodePDFRawStream(object as Parameters<typeof decodePDFRawStream>[0]).getBytes(1_000_000);
+    const operations = Buffer.from(contents).toString("latin1");
+    if (!operations.includes("BT")) continue;
+    textOperations.push(operations.replace(/<([0-9A-F]+)>/g, (_, hex: string) => Buffer.from(hex, "hex").toString("latin1")));
+  }
+
+  return textOperations.join("\n");
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -208,6 +226,65 @@ describe("GET /api/export — marketing attribution columns", () => {
     expect(rows[0]["UTM Term"]).toBe("reservar mesa");
   });
 
+  it("formats operational timestamps in Colombia time", async () => {
+    mocks.reservationFindMany.mockResolvedValueOnce([
+      buildReservationRow({
+        createdAt: new Date("2026-08-04T00:23:22.939Z"),
+        updatedAt: new Date("2026-08-04T00:23:22.939Z"),
+        confirmedAt: new Date("2026-08-04T00:23:22.939Z"),
+        rejectedAt: new Date("2026-08-04T00:23:22.939Z"),
+        cancelledAt: new Date("2026-08-04T00:23:22.939Z"),
+      }),
+    ]);
+
+    const { GET } = await import("@/app/api/export/route");
+    const res = await GET(new Request("http://localhost/api/export?format=json"));
+    const [row] = (await res.json()) as Array<Record<string, string>>;
+
+    for (const key of ["Creada en", "Actualizada en", "Confirmada en", "Rechazada en", "Cancelada en"]) {
+      expect(row[key]).toMatch(/3 de agosto de 2026/i);
+      expect(row[key]).toMatch(/7:23/);
+      expect(row[key]).toMatch(/p\.\s?m\./i);
+    }
+  });
+
+  it("builds the shared Colombia-formatted rows consumed by every export format", () => {
+    const [row] = buildReservationExportRows([
+      buildReservationRow({
+        reservationDate: new Date("2026-08-04T00:00:00.000Z"),
+        confirmedAt: new Date("2026-08-04T00:23:22.939Z"),
+        rejectedAt: new Date("2026-08-04T00:23:22.939Z"),
+        cancelledAt: new Date("2026-08-04T00:23:22.939Z"),
+      }),
+    ]);
+
+    expect(row.Fecha).toBe("04/08/2026");
+    for (const key of ["Confirmada en", "Rechazada en", "Cancelada en"] as const) {
+      expect(row[key]).toMatch(/3 de agosto de 2026/i);
+      expect(row[key]).toMatch(/7:23/);
+      expect(row[key]).toMatch(/p\.\s?m\./i);
+    }
+  });
+
+  it("writes Bogotá-formatted timestamps to XLSX", async () => {
+    const reservation = buildReservationRow({
+      confirmedAt: new Date("2026-08-04T00:23:22.939Z"),
+    });
+    const { GET } = await import("@/app/api/export/route");
+
+    mocks.reservationFindMany.mockResolvedValueOnce([reservation]);
+    const xlsx = await GET(new Request("http://localhost/api/export?format=xlsx"));
+    const workbook = new ExcelJS.Workbook();
+    const xlsxBytes = new Uint8Array(await xlsx.arrayBuffer());
+    await workbook.xlsx.load(xlsxBytes as never);
+    const worksheet = workbook.getWorksheet("Reservas");
+    const confirmedAtColumn = 15;
+
+    expect(worksheet?.getRow(1).getCell(confirmedAtColumn).value).toBe("Confirmada en");
+    expect(worksheet?.getRow(2).getCell(confirmedAtColumn).value).toMatch(/3 de agosto de 2026/i);
+    expect(worksheet?.getRow(2).getCell(confirmedAtColumn).value).toMatch(/7:23/);
+  });
+
   it("renders empty strings (not null) when a reservation has no marketing data", async () => {
     mocks.reservationFindMany.mockResolvedValueOnce([
       buildReservationRow({
@@ -237,19 +314,33 @@ describe("GET /api/export — marketing attribution columns", () => {
   });
 
   it("generates the PDF with the marketing attribution section without breaking", async () => {
-    mocks.reservationFindMany.mockResolvedValueOnce([buildReservationRow()]);
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-04T00:23:22.939Z"));
 
-    const { GET } = await import("@/app/api/export/route");
-    const res = await GET(new Request("http://localhost/api/export?format=pdf"));
-    expect(res.status).toBe(200);
-    expect(res.headers.get("Content-Type")).toContain("application/pdf");
+    try {
+      mocks.reservationFindMany.mockResolvedValueOnce([
+        buildReservationRow({ confirmedAt: new Date("2026-08-04T00:23:22.939Z") }),
+      ]);
 
-    // pdf-lib no expone extracción de texto; validamos que el documento se
-    // generó (cabecera %PDF y body no vacío) con datos de marketing presentes.
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    expect(bytes.length).toBeGreaterThan(0);
-    expect(Buffer.from(bytes.slice(0, 5)).toString("latin1")).toBe("%PDF-");
-  }, 10_000);
+      const { GET } = await import("@/app/api/export/route");
+      const res = await GET(new Request("http://localhost/api/export?format=pdf"));
+      expect(res.status).toBe(200);
+      expect(res.headers.get("Content-Type")).toContain("application/pdf");
+      expect(res.headers.get("Content-Disposition"))
+        .toBe('attachment; filename="reservas-tauras-2026-08-03.pdf"');
+
+      // pdf-lib does not provide text extraction. This proves an actual PDF response
+      // contains the report issue date and Bogotá-formatted reservation timestamp.
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      expect(bytes.length).toBeGreaterThan(0);
+      expect(Buffer.from(bytes.slice(0, 5)).toString("latin1")).toBe("%PDF-");
+      const visibleText = await extractPdfVisibleText(bytes);
+      expect(visibleText).toContain("Fecha de emisión: 3 de agosto de 2026");
+      expect(visibleText).toMatch(/Confirmada:.*3 de agosto de 2026.*7:23/is);
+    } finally {
+      vi.useRealTimers();
+    }
+  }, 20_000);
 
   it("generates the PDF when reservations mix marketing and no-marketing rows", async () => {
     // Ejercita el cálculo dinámico de altura: una card con sección de marketing
@@ -271,7 +362,7 @@ describe("GET /api/export — marketing attribution columns", () => {
     const res = await GET(new Request("http://localhost/api/export?format=pdf"));
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toContain("application/pdf");
-  });
+  }, 20_000);
 });
 
 describe("GET /api/export — limit", () => {

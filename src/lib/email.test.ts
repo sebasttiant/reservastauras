@@ -32,6 +32,12 @@ function lastSentMail(): CapturedMail {
   return call![0] as CapturedMail;
 }
 
+function expectVisibleReservationDate(html: string, label: string, date: string): void {
+  expect(html).toContain(
+    `text-transform: uppercase;">${label}</span><br>\n        <span style="color: #1a1a2e; font-size: 16px; font-weight: 600;">${date}</span>`,
+  );
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.existsSync.mockReturnValue(false);
@@ -310,7 +316,7 @@ describe("sendReservationConfirmationEmail", () => {
     vi.setSystemTime(new Date("2026-05-04T00:00:00Z"));
     try {
       const { sendReservationConfirmationEmail } = await import("@/lib/email");
-      const knownDate = new Date("2026-12-25T18:00:00Z");
+      const knownDate = new Date("2026-08-04T00:00:00.000Z");
 
       await sendReservationConfirmationEmail({
         to: "cliente@tauras.test",
@@ -324,9 +330,7 @@ describe("sendReservationConfirmationEmail", () => {
         language: "es",
       });
       const esHtml = lastSentMail().html ?? "";
-      // Lenient: el spelling exacto (con/sin acento, con/sin "de") puede variar
-      // según el ICU del runner. Lo estable es la base léxica.
-      expect(esHtml).toMatch(/viernes|diciembre/i);
+      expectVisibleReservationDate(esHtml, "Fecha", "martes, 4 de agosto de 2026");
 
       await sendReservationConfirmationEmail({
         to: "client@tauras.test",
@@ -340,7 +344,7 @@ describe("sendReservationConfirmationEmail", () => {
         language: "en",
       });
       const enHtml = lastSentMail().html ?? "";
-      expect(enHtml).toMatch(/December|Friday/i);
+      expectVisibleReservationDate(enHtml, "Date", "Tuesday, August 4, 2026");
     } finally {
       vi.useRealTimers();
     }
@@ -348,6 +352,34 @@ describe("sendReservationConfirmationEmail", () => {
 });
 
 describe("sendReservationRejectionEmail", () => {
+  it("renders the exact Spanish and English Prisma date-only calendar day", async () => {
+    const { sendReservationRejectionEmail } = await import("@/lib/email");
+    await sendReservationRejectionEmail({
+      to: "cliente@tauras.test",
+      name: "Cliente",
+      reservationDate: new Date("2026-08-04T00:00:00.000Z"),
+      reservationTime: "20:00",
+      area: "Patio",
+      location: EMAIL_LOCATION,
+      language: "es",
+    });
+
+    const html = lastSentMail().html ?? "";
+    expectVisibleReservationDate(html, "Fecha", "martes, 4 de agosto de 2026");
+
+    await sendReservationRejectionEmail({
+      to: "client@tauras.test",
+      name: "Client",
+      reservationDate: new Date("2026-08-04T00:00:00.000Z"),
+      reservationTime: "20:00",
+      area: "Patio",
+      location: EMAIL_LOCATION,
+      language: "en",
+    });
+
+    expectVisibleReservationDate(lastSentMail().html ?? "", "Date", "Tuesday, August 4, 2026");
+  });
+
   it("escapes HTML in the staff-supplied reason", async () => {
     const { sendReservationRejectionEmail } = await import("@/lib/email");
     await sendReservationRejectionEmail({
@@ -391,6 +423,34 @@ describe("sendReservationRejectionEmail", () => {
 });
 
 describe("sendReservationCancellationEmail", () => {
+  it("renders the exact Spanish and English Prisma date-only calendar day", async () => {
+    const { sendReservationCancellationEmail } = await import("@/lib/email");
+    await sendReservationCancellationEmail({
+      to: "cliente@tauras.test",
+      name: "Cliente",
+      reservationDate: new Date("2026-08-04T00:00:00.000Z"),
+      reservationTime: "20:00",
+      area: "Patio",
+      location: EMAIL_LOCATION,
+      language: "es",
+    });
+
+    const html = lastSentMail().html ?? "";
+    expectVisibleReservationDate(html, "Fecha", "martes, 4 de agosto de 2026");
+
+    await sendReservationCancellationEmail({
+      to: "client@tauras.test",
+      name: "Client",
+      reservationDate: new Date("2026-08-04T00:00:00.000Z"),
+      reservationTime: "20:00",
+      area: "Patio",
+      location: EMAIL_LOCATION,
+      language: "en",
+    });
+
+    expectVisibleReservationDate(lastSentMail().html ?? "", "Date", "Tuesday, August 4, 2026");
+  });
+
   it("renders Spanish cancellation copy", async () => {
     const { sendReservationCancellationEmail } = await import("@/lib/email");
     await sendReservationCancellationEmail({

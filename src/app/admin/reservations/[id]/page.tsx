@@ -9,6 +9,7 @@ import { requireAdmin } from "@/lib/auth";
 import { parsePublicLanguage } from "@/lib/i18n/language";
 import type { PublicLanguage } from "@/lib/i18n/language";
 import { RESERVATION_DETAIL_ERROR_MESSAGES, lookupMessage } from "@/lib/messages";
+import { formatReservationActionDateTime } from "@/lib/reservations/business-date";
 import { ReservationReasonPicker } from "./_components/reservation-reason-picker";
 
 interface ReservationDetailPageProps {
@@ -30,14 +31,9 @@ const NOT_AVAILABLE_LABEL = "No disponible";
 const REJECTION_REASON_PREFIX = "RECHAZO:";
 const STATUS_OUTCOME_OK_KEYS = new Set(["confirmed", "rejected", "cancelled"]);
 
-const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("es-AR", {
-  dateStyle: "long",
-  timeStyle: "short",
-});
-
 function formatActionDate(date: Date | null | undefined): string {
   if (!date) return NOT_AVAILABLE_LABEL;
-  return DATE_TIME_FORMATTER.format(date);
+  return formatReservationActionDateTime(date);
 }
 
 function extractRejectionReasonFromNotes(notes: string | null | undefined): string | null {

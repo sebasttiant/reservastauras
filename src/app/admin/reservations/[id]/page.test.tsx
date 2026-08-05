@@ -106,4 +106,24 @@ describe("ReservationDetailPage access", () => {
     expect(html).toContain("Rechazar reserva");
     expect(html).toContain("Cancelar reserva");
   });
+
+  it.each([
+    [RESERVATION_STATUS.CONFIRMED, "confirmedAt", "Fecha de confirmación"],
+    [RESERVATION_STATUS.REJECTED, "rejectedAt", "Fecha de rechazo"],
+    [RESERVATION_STATUS.CANCELLED, "cancelledAt", "Fecha de cancelación"],
+  ] as const)("renders %s action timestamps in Colombia time", async (status, dateKey, label) => {
+    const actionDate = new Date("2026-08-04T00:23:22.939Z");
+    mocks.reservationFindUnique.mockResolvedValueOnce({
+      ...pendingReservation(),
+      status,
+      [dateKey]: actionDate,
+    });
+
+    const html = await renderDetailPage(ADMIN_ROLE.RESERVATION_OPERATOR);
+
+    expect(html).toContain(label);
+    expect(html).toMatch(/3 de agosto de 2026/i);
+    expect(html).toMatch(/7:23/);
+    expect(html).toMatch(/p\.\s?m\./i);
+  });
 });

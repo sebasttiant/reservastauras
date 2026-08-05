@@ -5,6 +5,7 @@ import nodemailer from "nodemailer";
 import { getEnv } from "@/lib/env";
 import type { PublicLanguage } from "@/lib/i18n/language";
 import type { ReservationLocationEmailInfo } from "@/lib/reservations/locations";
+import { formatReservationDateForLocale } from "@/lib/reservations/business-date";
 import {
   getReservationEmailCopy,
   type ReservationEmailCopy,
@@ -95,15 +96,6 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
-function formatReservationDate(date: Date, locale: ReservationEmailCopy["dateLocale"]): string {
-  return date.toLocaleDateString(locale, {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-}
-
 function buildLogoAttachments(): MailAttachment[] {
   return [{ filename: "tauras.png", path: path.join(process.cwd(), "public", "tauras.png"), cid: TAURAS_LOGO_CID }];
 }
@@ -178,7 +170,7 @@ function buildAreaImageBlock(copy: ReservationEmailCopy, areaAttachment: MailAtt
 
 function buildReservationEmailHtml(input: ReservationEmailTemplateInput, areaAttachment: MailAttachment | null): string {
   const { copy, kindCopy } = input;
-  const date = escapeHtml(formatReservationDate(input.reservationDate, copy.dateLocale));
+  const date = escapeHtml(formatReservationDateForLocale(input.reservationDate, copy.dateLocale));
   const time = escapeHtml(input.reservationTime);
   const area = escapeHtml(input.area || copy.labels.areaTbd);
   const location = escapeHtml(input.location.reservationLabel);

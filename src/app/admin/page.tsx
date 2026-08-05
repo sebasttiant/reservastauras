@@ -7,7 +7,7 @@ import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 import { canManageAdministration, canManageUsers } from "@/lib/permissions";
 import { ADMIN_ERROR_MESSAGES, lookupMessage } from "@/lib/messages";
-import { getBusinessTodayDateString } from "@/lib/reservations/business-date";
+import { formatReservationActionDateTime, getBusinessTodayDateString } from "@/lib/reservations/business-date";
 import { AdminReservationFilters } from "./_components/admin-reservation-filters";
 
 // Construye la URL del export forwardeando los filtros activos del dashboard.
@@ -201,7 +201,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                   <td>{reservation.user.phone ?? "-"}</td>
                   <td>{reservation.area ?? "Sin área"}</td>
                   <td><span className={`status-pill status-${reservation.status.toLowerCase()}`}>{STATUS_LABELS[reservation.status]}</span></td>
-                  <td>{reservation.createdAt.toISOString().slice(0, 10)}</td>
+                  <td>{formatReservationActionDateTime(reservation.createdAt)}</td>
                   <td><Link className="button table-button" href={`/admin/reservations/${reservation.id}`}>Ver detalle</Link></td>
                 </tr>
               ))
