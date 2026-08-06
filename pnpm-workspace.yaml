@@ -10,8 +10,13 @@ overrides:
   hono: 4.12.27
   vite: 8.1.1
   esbuild: 0.28.1
-  fast-uri: 3.1.2
-  "brace-expansion@>=5.0.0 <5.0.6": "5.0.6"
+  fast-uri: 3.1.5
+  js-yaml: 4.3.1
+  # Three major lines of brace-expansion are present in the tree and each one
+  # has its own advisory range, so each is pinned to the latest of its line.
+  "brace-expansion@1": "1.1.18"
+  "brace-expansion@2": "2.1.4"
+  "brace-expansion@>=3.0.0": "5.0.9"
   tmp: 0.2.7
 
 allowBuilds:
