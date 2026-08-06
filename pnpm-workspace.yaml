@@ -3,7 +3,9 @@ packages:
 
 overrides:
   picomatch@4.0.3: 4.0.4
-  postcss: 8.5.14
+  # Must stay >= the version next declares, otherwise this override pins the
+  # vulnerable postcss (GHSA-r28c-9q8g-f849) inside next's own tree.
+  postcss: 8.5.23
   '@hono/node-server@1.19.11': 1.19.14
   hono: 4.12.27
   vite: 8.1.1
