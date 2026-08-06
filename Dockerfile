@@ -1,4 +1,4 @@
-FROM node:24.15.0-trixie-slim AS base
+FROM node:24.19.0-trixie-slim AS base
 ARG NPM_VERSION=11.18.0
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
@@ -40,6 +40,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.
 COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
 RUN mkdir -p /app/public/uploads/zones && chown -R nextjs:nodejs /app/public/uploads
 RUN chown nextjs:nodejs /app
+# El runtime no usa npm: el CMD y scripts/deploy.sh invocan los binarios de
+# node_modules/.bin directamente, y pnpm viene de corepack. npm sólo aporta
+# superficie de ataque, y sus dependencias bundleadas (ip-address,
+# brace-expansion) arrastran CVEs que ninguna versión publicada de npm corrige.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 USER nextjs
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
