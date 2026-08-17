@@ -12,7 +12,11 @@ import {
   summarizeFilters,
 } from "@/lib/reservations/export-filters";
 import { formatBusinessIssueDate } from "@/lib/reservations/business-date";
-import { buildReservationExportRows, getReservationExportPdfFilename } from "@/lib/reservations/export-data";
+import {
+  buildReservationExportRows,
+  formatExportNotesBlock,
+  getReservationExportPdfFilename,
+} from "@/lib/reservations/export-data";
 import { getRequestSecurityContext } from "@/lib/security/request";
 import ExcelJS from "exceljs";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
@@ -117,6 +121,17 @@ export async function GET(request: Request) {
     const worksheet = workbook.addWorksheet("Reservas");
     worksheet.columns = Object.keys(data[0] ?? {}).map((key) => ({ header: key, key }));
     worksheet.addRows(data);
+    // Comercial filtra por "Motivo" y "País" desde los títulos, así que el
+    // autofiltro va sobre la fila de encabezados completa.
+    const headerRow = worksheet.getRow(1);
+    headerRow.font = { bold: true };
+    if (worksheet.columnCount > 0) {
+      worksheet.autoFilter = {
+        from: { row: 1, column: 1 },
+        to: { row: Math.max(worksheet.rowCount, 1), column: worksheet.columnCount },
+      };
+      worksheet.views = [{ state: "frozen", ySplit: 1 }];
+    }
     const buffer = await workbook.xlsx.writeBuffer();
 
     return new NextResponse(buffer, {
@@ -373,7 +388,7 @@ export async function GET(request: Request) {
       const linesCargadaPor = wrapText(row["Cargada por"] || "-", 42).length;
       const linesConfirmado = wrapText(row["Confirmado por"] || "-", 95).length;
       const linesMov = wrapText(movementInfo, 95).length;
-      const notesLines = wrapText(row.Notas || "-", 95);
+      const notesLines = wrapText(formatExportNotesBlock(row), 95);
       const emailErrorLines = row["Error email"] ? wrapText(row["Error email"], 95) : [];
 
       // Atribución de marketing: sección compacta de una línea wrappeada con
