@@ -15,7 +15,7 @@ import { parsePublicLanguage } from "@/lib/i18n/language";
 import {
   LOCATION_SLUGS,
   getLocationTimeOptions,
-  isPublicVenueAlias,
+  normalizePublicVenueAlias,
   resolveVenueAliasToSlug,
 } from "@/lib/reservations/location-config";
 import { UTM_PARAMETERS, sanitizeUtmValue } from "@/lib/reservations/marketing";
@@ -99,8 +99,8 @@ export async function PublicReservationPage({ searchParams }: PublicReservationP
   // Marketing entry: resolve the public `venue` alias to an internal slug.
   // Only honoured when it maps to an actually active location; otherwise we
   // fall back to the current behaviour (invalid/absent venue is ignored).
-  const landingVenue = isPublicVenueAlias(searchParams.venue) ? searchParams.venue : null;
-  const requestedVenueSlug = resolveVenueAliasToSlug(searchParams.venue);
+  const landingVenue = normalizePublicVenueAlias(searchParams.venue);
+  const requestedVenueSlug = resolveVenueAliasToSlug(landingVenue);
   const activeSlugs = new Set(publicLocations.map((location) => location.slug));
   const preselectedVenueSlug =
     requestedVenueSlug && activeSlugs.has(requestedVenueSlug) ? requestedVenueSlug : null;

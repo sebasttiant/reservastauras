@@ -18,6 +18,18 @@ export const PUBLIC_VENUE_ALIASES = {
 
 export type PublicVenueAlias = keyof typeof PUBLIC_VENUE_ALIASES;
 
+// Accepted values at public input boundaries. Canonical aliases remain the
+// mapping, transfer, and persistence contract; location-specific inputs normalize to them.
+export const PUBLIC_VENUE_ALIAS_INPUTS = {
+  steakhouse: "steakhouse",
+  "steakhouse-poblado": "steakhouse",
+  "tex-mex": "tex-mex",
+  "tex-mex-palmas": "tex-mex",
+  "bar-lounge": "bar-lounge",
+} as const satisfies Record<string, PublicVenueAlias>;
+
+export type PublicVenueAliasInput = keyof typeof PUBLIC_VENUE_ALIAS_INPUTS;
+
 // The query string is a client-controlled channel: validate `venue` against
 // the allowlist before trusting it. `Object.hasOwn` guards against prototype
 // keys (e.g. "constructor") sneaking through.
@@ -25,11 +37,19 @@ export function isPublicVenueAlias(value: unknown): value is PublicVenueAlias {
   return typeof value === "string" && Object.hasOwn(PUBLIC_VENUE_ALIASES, value);
 }
 
-// Resolves a public venue alias (`steakhouse`, `bar-lounge`, `tex-mex`) to its
-// internal location slug. Returns null for any value outside the allowlist so
-// callers can fall back to the default behaviour instead of trusting input.
+export function normalizePublicVenueAlias(value: unknown): PublicVenueAlias | null {
+  if (typeof value !== "string" || !Object.hasOwn(PUBLIC_VENUE_ALIAS_INPUTS, value)) {
+    return null;
+  }
+
+  return PUBLIC_VENUE_ALIAS_INPUTS[value as PublicVenueAliasInput];
+}
+
+// Resolves a canonical or allowed external venue input to its internal location
+// slug. Returns null outside the allowlist so callers can safely fall back.
 export function resolveVenueAliasToSlug(value: unknown): string | null {
-  return isPublicVenueAlias(value) ? PUBLIC_VENUE_ALIASES[value] : null;
+  const alias = normalizePublicVenueAlias(value);
+  return alias ? PUBLIC_VENUE_ALIASES[alias] : null;
 }
 
 const STEAKHOUSE_TIMES = [
