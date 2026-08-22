@@ -7,6 +7,7 @@ import {
   isLocationOpenOnDate,
   isLocationTimeAllowed,
   isPublicVenueAlias,
+  normalizePublicVenueAlias,
   resolveVenueAliasToSlug,
 } from "@/lib/reservations/location-config";
 
@@ -64,6 +65,21 @@ describe("public venue aliases", () => {
     expect(resolveVenueAliasToSlug("steakhouse")).toBe(LOCATION_SLUGS.STEAKHOUSE);
     expect(resolveVenueAliasToSlug("bar-lounge")).toBe(LOCATION_SLUGS.BAR_LOUNGE);
     expect(resolveVenueAliasToSlug("tex-mex")).toBe(LOCATION_SLUGS.TEX_MEX);
+  });
+
+  it("normalizes only the explicit public input allowlist", () => {
+    expect(normalizePublicVenueAlias("steakhouse")).toBe("steakhouse");
+    expect(normalizePublicVenueAlias("steakhouse-poblado")).toBe("steakhouse");
+    expect(normalizePublicVenueAlias("tex-mex")).toBe("tex-mex");
+    expect(normalizePublicVenueAlias("tex-mex-palmas")).toBe("tex-mex");
+    expect(normalizePublicVenueAlias("bar-lounge")).toBe("bar-lounge");
+    expect(normalizePublicVenueAlias("../../admin")).toBeNull();
+    expect(normalizePublicVenueAlias(undefined)).toBeNull();
+  });
+
+  it("resolves location-specific input aliases through their canonical aliases", () => {
+    expect(resolveVenueAliasToSlug("steakhouse-poblado")).toBe(LOCATION_SLUGS.STEAKHOUSE);
+    expect(resolveVenueAliasToSlug("tex-mex-palmas")).toBe(LOCATION_SLUGS.TEX_MEX);
   });
 
   it("never exposes internal slugs as valid public aliases", () => {

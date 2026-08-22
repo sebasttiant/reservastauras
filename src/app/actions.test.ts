@@ -950,7 +950,7 @@ describe("createReservationAction (persistencia bilingüe + redirects saneados)"
 
   it("persiste landingVenue y los UTM del link de marketing en la reserva", async () => {
     const formData = buildFormData({
-      landingVenue: "tex-mex",
+      landingVenue: "tex-mex-palmas",
       utmSource: "google",
       utmMedium: "cpc",
       utmCampaign: "texmex_es",
@@ -971,22 +971,22 @@ describe("createReservationAction (persistencia bilingüe + redirects saneados)"
   });
 
   it("preserva la sede realmente seleccionada aunque el landingVenue de entrada difiera", async () => {
-    // Entra por tex-mex pero reserva en bar-lounge: la reserva guarda la sede
-    // final, y landingVenue conserva el alias de marketing de entrada.
+    // Entra por un alias no canónico de Steakhouse pero reserva en Tex Mex: la
+    // reserva guarda la sede final y normaliza el landingVenue de entrada.
     const formData = buildFormData({
-      locationSlug: "tauras-bar-lounge",
-      // Bar & Lounge is single-zone: its only valid area is its own name.
-      area: "Tauras Bar & Lounge",
-      landingVenue: "tex-mex",
+      locationSlug: "tauras-tex-mex",
+      reservationTime: "17:00",
+      area: "Salón",
+      landingVenue: "steakhouse-poblado",
     });
-    mocks.locationFindFirst.mockResolvedValueOnce({ id: "location-bar-lounge" });
+    mocks.locationFindFirst.mockResolvedValueOnce({ id: "location-tex-mex" });
     const { createReservationAction } = await import("@/app/actions");
 
     await expect(createReservationAction(formData)).rejects.toThrow(/redirect:/);
 
     const createArgs = mocks.reservationCreate.mock.calls[0]?.[0] as { data: Record<string, unknown> };
-    expect(createArgs.data.locationId).toBe("location-bar-lounge");
-    expect(createArgs.data.landingVenue).toBe("tex-mex");
+    expect(createArgs.data.locationId).toBe("location-tex-mex");
+    expect(createArgs.data.landingVenue).toBe("steakhouse");
   });
 
   it("crea la reserva sin marketing y deja los campos de tracking en null", async () => {

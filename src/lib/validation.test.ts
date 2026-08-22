@@ -193,6 +193,22 @@ describe("reservationRequestSchema (con reloj fijado a Bogotá borde-de-día)", 
     }
   });
 
+  it.each([
+    ["steakhouse-poblado", "steakhouse"],
+    ["tex-mex-palmas", "tex-mex"],
+  ])("normaliza landingVenue=%s directamente en el servidor", (landingVenue, expected) => {
+    const result = reservationRequestSchema.safeParse({
+      ...baseInput,
+      reservationDate: FAR_FUTURE,
+      landingVenue,
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.landingVenue).toBe(expected);
+    }
+  });
+
   it("no rompe la reserva cuando un UTM supera 200 caracteres: lo recorta a 200", () => {
     // Best-effort real: un utm_campaign larguísimo llegado directo al server NO
     // debe invalidar el formulario entero. Se recorta a 200, no se rechaza.
@@ -229,7 +245,7 @@ describe("reservationRequestSchema (con reloj fijado a Bogotá borde-de-día)", 
     const result = reservationRequestSchema.safeParse({
       ...baseInput,
       reservationDate: FAR_FUTURE,
-      landingVenue: "tauras-default",
+      landingVenue: "../../admin",
     });
     expect(result.success).toBe(true);
     if (result.success) {

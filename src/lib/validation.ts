@@ -2,7 +2,7 @@ import { z } from "zod";
 import { ADMIN_ROLE, RESERVATION_SOURCE_VALUES, RESERVATION_STATUS } from "@/lib/constants";
 import { DEFAULT_PUBLIC_LANGUAGE, publicLanguageSchema } from "@/lib/i18n/language";
 import { isTodayOrLaterInBusinessZone } from "@/lib/reservations/business-date";
-import { isPublicVenueAlias } from "@/lib/reservations/location-config";
+import { normalizePublicVenueAlias } from "@/lib/reservations/location-config";
 import { sanitizeUtmValue } from "@/lib/reservations/marketing";
 
 // Marketing attribution fields are best-effort: they NEVER fail the form.
@@ -16,14 +16,12 @@ const trackingFieldSchema = z
   .optional()
   .transform((value) => sanitizeUtmValue(value) ?? undefined);
 
-// `landingVenue` stores the public alias the visitor arrived with
-// (`steakhouse`, `bar-lounge`, `tex-mex`). Anything outside the allowlist is
-// dropped silently — we record marketing entry intent, never raw client input.
+// `landingVenue` stores the canonical public alias. Allowed location-specific
+// inputs normalize first; anything else is dropped without blocking the booking.
 const landingVenueSchema = z
-  .string()
-  .trim()
+  .unknown()
   .optional()
-  .transform((value) => (isPublicVenueAlias(value) ? value : undefined));
+  .transform((value) => normalizePublicVenueAlias(value) ?? undefined);
 
 const dateOnlySchema = z
   .string()

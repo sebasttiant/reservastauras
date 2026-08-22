@@ -71,6 +71,7 @@ describe("HomePage public language rendering", () => {
     expect(html).toContain('aria-current="true"');
     expect(html).not.toContain('name="lang"');
     expect(html).not.toContain('href="/?lang=en"');
+    expect(html).not.toContain('name="landingVenue"');
   });
 
   it("renders Spanish copy from lang=es while keeping canonical option values", async () => {
@@ -171,6 +172,29 @@ describe("HomePage marketing venue + UTM links", () => {
     expect(radioIsChecked(html, "tauras-bar-lounge")).toBe(true);
   });
 
+  it.each([
+    ["steakhouse-poblado", "steakhouse", "tauras-default"],
+    ["tex-mex-palmas", "tex-mex", "tauras-tex-mex"],
+  ])("normalizes ?venue=%s before rendering attribution and language links", async (input, canonical, slug) => {
+    const html = await renderHomePage({
+      venue: input,
+      lang: "es",
+      utm_source: "meta",
+      utm_medium: "paid_social",
+      utm_campaign: "venue_launch",
+    });
+
+    expect(radioIsChecked(html, slug)).toBe(true);
+    expect(html).toContain(`name="landingVenue" value="${canonical}"`);
+    expect(html).toContain(
+      `href="/?lang=es&amp;venue=${canonical}&amp;utm_source=meta&amp;utm_medium=paid_social&amp;utm_campaign=venue_launch"`,
+    );
+    expect(html).toContain(
+      `href="/?venue=${canonical}&amp;utm_source=meta&amp;utm_medium=paid_social&amp;utm_campaign=venue_launch"`,
+    );
+    expect(html).not.toContain(`venue=${input}`);
+  });
+
   it("preserves the venue in the language-switch hrefs", async () => {
     const html = await renderHomePage({ venue: "tex-mex", lang: "es" });
 
@@ -228,7 +252,7 @@ describe("HomePage marketing venue + UTM links", () => {
   });
 
   it("ignores an invalid venue without breaking the page or preselecting", async () => {
-    const html = await renderHomePage({ venue: "foo", lang: "es" });
+    const html = await renderHomePage({ venue: "../../admin", lang: "es" });
 
     expect(html).toContain("Reserva tu mesa con tranquilidad");
     expect(html).not.toContain('name="landingVenue"');
